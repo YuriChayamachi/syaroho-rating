@@ -78,7 +78,11 @@ class Syaroho(object):
 
         new_members = set(competitor_names) - set(existing_user_names)
 
-        self.twitter.add_members_to_list(list(new_members))
+        if len(new_members):
+            self.twitter.add_members_to_list(list(new_members))
+            print(f"{len(new_members)} members added to list.")
+        else:
+            print("no new members.")
         return
 
     def pre_observe(self, do_post: bool = False):
@@ -137,11 +141,7 @@ class Syaroho(object):
             self.twitter.post_with_multiple_media(message, table_paths)
 
         # add members
-        try:
-            all_members = self.io.get_members()
-        except FileNotFoundError:
-            print("no member found.")
-            all_members = []
+        all_members = self._fetch_and_save_member()
         self._add_new_member(statuses, all_members)
 
         attend_users = [u["screen_name"] for u in daily_ratings]

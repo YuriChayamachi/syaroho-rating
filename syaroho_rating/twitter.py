@@ -4,7 +4,7 @@ from typing import List, Dict
 import pandas as pd
 import pendulum
 import tweepy
-from tweepy import Cursor
+from tweepy import Cursor, Status
 from timeout_decorator import timeout
 
 from syaroho_rating.consts import (
@@ -88,30 +88,30 @@ class Twitter(object):
     def listen_and_reply(self, rating_infos, summary_df):
         listener = Listener(rating_infos, summary_df, self)
         stream = tweepy.Stream(self.api.auth, listener)
-        stream.filter(track=["@" + ACCOUNT_NAME])
+        stream.filter(track=["@" + ACCOUNT_NAME], is_async=False)
 
 
 class Listener(tweepy.StreamListener):
     def __init__(
         self, rating_info: Dict, rating_summary: pd.DataFrame, twitter: Twitter
     ):
-        super().__init__(self)
+        super().__init__(api=twitter.api)
         self.rating_info = rating_info
-        self.rating_summary = rating_summary
+        self.rating_summary = rating_summary.reset_index().set_index("User")
         self.twitter = twitter
         self.replied_list = []
 
-    def on_status(self, status: Dict):
-        name_jp = status["user"]["name"]
-        name = status["user"]["screen_name"]
-        tweet_id = str(status["id"])
-        text = status["text"]
-        reply_time = tweetid_to_datetime(status["id"])
-        delta_second = (dt.datetime.now() - reply_time).seconds
+    def on_status(self, status: Status):
+        name_jp = status.author.name
+        name = status.author.screen_name
+        tweet_id = str(status.id)
+        text = status.text
+        reply_time = tweetid_to_datetime(status.id)  # type: pendulum.DateTime
+        delta_second = (pendulum.now("Asia/Tokyo") - reply_time).total_seconds()
 
         if (
             (tweet_id in self.replied_list)
-            or (status["favorited"] == True)
+            or (status.favorited is True)
             or (delta_second >= reply_patience)
             or (name == ACCOUNT_NAME)
         ):
@@ -144,7 +144,15 @@ class Listener(tweepy.StreamListener):
             s5 = "ベスト記録: " + str(best_time)
             s_all = s0 + s1 + s2 + s3 + s4 + s5
 
+            # 機械的に生成されるグラフファイル名を取得
             fname = GraphMaker.get_savepath(name)
+
+            # グラフは参加者のものだけ生成しているので、ファイルの有無で当日の参加者か判別
+            # 参加者でない場合はスキップ
+            if not fname.exists():
+                print(f"@{name_r} didn't participated today. skip.")
+                self.replied_list.append(tweet_id)
+                return
 
             self.twitter.post_with_multiple_media(
                 s_all, media_list=[str(fname)], in_reply_to_status_id=tweet_id

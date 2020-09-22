@@ -1,4 +1,4 @@
-from typing import List, Dict
+from typing import List, Dict, Tuple
 
 import pandas as pd
 import pendulum
@@ -104,7 +104,7 @@ class Syaroho(object):
 
     def observe(
         self, dq_statuses: List, do_post: bool = False, do_retweet: bool = False
-    ):
+    ) -> Tuple[pd.DataFrame, Dict]:
         today = pendulum.today("Asia/Tokyo")
         statuses = self._fetch_and_save_result(today)
 
@@ -132,37 +132,36 @@ class Syaroho(object):
         if do_retweet:
             self._retweet_winners(df)
 
-        # make table and post results
+        # make table for result tweet
         tm = TableMaker(df_result, today)
         table_paths = tm.make()
         table_paths = [str(p) for p in table_paths]
-        if do_post:
-            message = tm._make_header()
-            self.twitter.post_with_multiple_media(message, table_paths)
+
+        # create graphs for reply
+        rtg = Rating(io_handler=self.io)
+        summary_df, rating_infos = rtg.get_summary_dataframe_and_infos(today)
+        attend_users = [u["screen_name"] for u in daily_ratings]
+        gm = GraphMaker(rating_infos)
+        gm.draw_graph_users(attend_users)
 
         # add members
         all_members = self._fetch_and_save_member()
         self._add_new_member(statuses, all_members)
 
-        attend_users = [u["screen_name"] for u in daily_ratings]
-        return attend_users
+        # ツイートからリプライ受付までの時間が短くなるよう最後にツイート処理を行う
+        if do_post:
+            message = tm._make_header()
+            self.twitter.post_with_multiple_media(message, table_paths)
+
+        return summary_df, rating_infos
 
     def _retweet_winners(self, df_ratings: pd.DataFrame):
         df_top = df_ratings[df_ratings["Rank"] == 1].reset_index()
         for i, row in df_top.iterrows():
-            if not row.user.protected:
-                self.twitter.api.retweet(row.id)
+            self.twitter.api.retweet(row.id)
         return
 
-    def reply_to_mentions(self, attend_users: List):
-        today = pendulum.today("Asia/Tokyo")
-        rtg = Rating(io_handler=self.io)
-        summary_df, rating_infos = rtg.get_summary_dataframe_and_infos(today)
-
-        # create graphs
-        gm = GraphMaker(rating_infos)
-        gm.draw_graph_users(attend_users)
-
+    def reply_to_mentions(self, summary_df: pd.DataFrame, rating_infos: Dict):
         self.twitter.listen_and_reply(rating_infos, summary_df)
         return
 

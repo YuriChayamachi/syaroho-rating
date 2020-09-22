@@ -36,11 +36,11 @@ def main(debug=False):
 
     # observe
     print("observe")
-    attend_users = syaroho.observe(dq_statuses, do_post=DO_POST, do_retweet=DO_RETWEET)
+    summary_df, rating_infos = syaroho.observe(dq_statuses, do_post=DO_POST, do_retweet=DO_RETWEET)
 
     # reply to mentions(10分間実行)
     print("reply")
-    syaroho.reply_to_mentions(attend_users)
+    syaroho.reply_to_mentions(summary_df, rating_infos)
     return
 
 

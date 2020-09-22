@@ -41,12 +41,12 @@ def perf_to_color(perf: Union[int, float]) -> np.ndarray:
 
 
 # timedeltaをミリ秒に変換する関数
-def timedelta_to_ms(delta):
+def timedelta_to_ms(delta) -> float:
     ms = (delta.days * 86400 + delta.seconds) * 1000 + (delta.microseconds / 1000)
     return ms
 
 
-def tweetid_to_datetime(tweetid: str):
+def tweetid_to_datetime(tweetid: str) -> pendulum.DateTime:
     rawtime = pendulum.datetime(1970, 1, 1, tz="UTC") + dt.timedelta(
         milliseconds=int(tweetid / 2 ** 22) + 1288834974657
     )

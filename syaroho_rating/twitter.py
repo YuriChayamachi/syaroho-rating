@@ -88,7 +88,8 @@ class Twitter(object):
     def listen_and_reply(self, rating_infos, summary_df):
         listener = Listener(rating_infos, summary_df, self)
         stream = tweepy.Stream(self.api.auth, listener)
-        stream.filter(track=["@" + ACCOUNT_NAME], is_async=False)
+        # 大量のリプに対処するため非同期で処理
+        stream.filter(track=["@" + ACCOUNT_NAME], is_async=True)
 
 
 class Listener(tweepy.StreamListener):

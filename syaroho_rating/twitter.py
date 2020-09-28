@@ -1,11 +1,11 @@
 import datetime as dt
+import time
 from typing import List, Dict
 
 import pandas as pd
 import pendulum
 import tweepy
 from tweepy import Cursor, Status
-from timeout_decorator import timeout
 
 from syaroho_rating.consts import (
     invalid_clients,
@@ -84,12 +84,16 @@ class Twitter(object):
         self.api.update_status(status=message, media_ids=media_ids, **kwargs)
         return
 
-    @timeout(60 * 10)
     def listen_and_reply(self, rating_infos, summary_df):
         listener = Listener(rating_infos, summary_df, self)
         stream = tweepy.Stream(self.api.auth, listener)
         # 大量のリプに対処するため非同期で処理
         stream.filter(track=["@" + ACCOUNT_NAME], is_async=True)
+
+        # 10分後にストリーミングを終了
+        time.sleep(dt.timedelta(minutes=10).total_seconds())
+        stream.disconnect()
+        return
 
 
 class Listener(tweepy.StreamListener):
@@ -111,7 +115,7 @@ class Listener(tweepy.StreamListener):
         delta_second = (pendulum.now("Asia/Tokyo") - reply_time).total_seconds()
 
         if (
-            (tweet_id in self.replied_list)
+            (name in self.replied_list)
             or (status.favorited is True)
             or (delta_second >= reply_patience)
             or (name == ACCOUNT_NAME)
@@ -124,6 +128,17 @@ class Listener(tweepy.StreamListener):
             or (text.find("らんく") > -1)
             or (text.lower().find("rank") > -1)
         ):
+            # 機械的に生成されるグラフファイル名を取得
+            fname = GraphMaker.get_savepath(name)
+
+            # グラフは参加者のものだけ生成しているので、ファイルの有無で当日の参加者か判別
+            # 参加者でない場合はスキップ
+            name_r = name.replace("@", "＠")
+            if not fname.exists():
+                print(f"@{name_r} didn't participated today. skip.")
+                self.replied_list.append(name)
+                return
+
             print("Sending a reply to @" + name)
 
             result = self.rating_info[name]
@@ -135,8 +150,6 @@ class Listener(tweepy.StreamListener):
             match = self.rating_summary["Match"][name]
             win = self.rating_summary["Win"][name]
 
-            name_r = name.replace("@", "＠")
-
             s0 = "@" + name_r + "\n"
             s1 = name_jp + " (しゃろほー" + classes(highest) + ")\n"
             s2 = "レーティング: " + str(rating) + " (最高: " + str(highest) + ")" + "\n"
@@ -145,20 +158,10 @@ class Listener(tweepy.StreamListener):
             s5 = "ベスト記録: " + str(best_time)
             s_all = s0 + s1 + s2 + s3 + s4 + s5
 
-            # 機械的に生成されるグラフファイル名を取得
-            fname = GraphMaker.get_savepath(name)
-
-            # グラフは参加者のものだけ生成しているので、ファイルの有無で当日の参加者か判別
-            # 参加者でない場合はスキップ
-            if not fname.exists():
-                print(f"@{name_r} didn't participated today. skip.")
-                self.replied_list.append(tweet_id)
-                return
-
             self.twitter.post_with_multiple_media(
                 s_all, media_list=[str(fname)], in_reply_to_status_id=tweet_id
             )
-            self.replied_list.append(tweet_id)
+            self.replied_list.append(name)
             return
 
 

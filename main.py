@@ -4,7 +4,7 @@ import click
 import pendulum
 
 from syaroho_rating.consts import DO_POST, DO_RETWEET, DEBUG
-from syaroho_rating.io_handler import S3IOHandler
+from syaroho_rating.io_handler import get_io_handler
 from syaroho_rating.syaroho import Syaroho
 from syaroho_rating.twitter import Twitter
 
@@ -17,17 +17,16 @@ def cli():
 
 
 @cli.command()
-@click.option("--debug", is_flag=True, type=bool)
-def run(debug=False):
+def run():
     """0時0分JSTに呼ばれる"""
     twitter = Twitter()
-    io_handler = S3IOHandler()
+    io_handler = get_io_handler()
     syaroho = Syaroho(twitter, io_handler)
 
     today = pendulum.today(TZ)
 
     # wait until 00:00:05 JST
-    if not debug:
+    if not DEBUG:
         dur = pendulum.now(TZ) - today.replace(second=5)
         if dur.total_seconds() > 0:
             time.sleep(dur.total_seconds())
@@ -37,7 +36,7 @@ def run(debug=False):
     dq_statuses = syaroho.run_dq(do_post=DO_POST)
 
     # wait until 00:02:00 JST
-    if not debug:
+    if not DEBUG:
         dur = pendulum.now(TZ) - today.replace(minute=2)
         if dur.total_seconds() > 0:
             time.sleep(dur.total_seconds())
@@ -62,11 +61,11 @@ def run(debug=False):
 @click.option("--retweet", is_flag=True, type=bool)
 def backfill(start: str, end: str, eg_start: bool, fetch_tweet: bool,
              post: bool, retweet: bool):
-    start_date = pendulum.parse(start, tz="Asia/Tokyo")
-    end_date = pendulum.parse(end, tz="Asia/Tokyo")
+    start_date = pendulum.parse(start, tz=TZ)
+    end_date = pendulum.parse(end, tz=TZ)
 
     twitter = Twitter()
-    io_handler = S3IOHandler()
+    io_handler = get_io_handler()
     syaroho = Syaroho(twitter, io_handler)
 
     syaroho.backfill(start_date, end_date, post, retweet, fetch_tweet, eg_start)
@@ -77,10 +76,10 @@ def backfill(start: str, end: str, eg_start: bool, fetch_tweet: bool,
 @click.argument("date", type=str)
 @click.option("--save", is_flag=True, type=bool)
 def fetch_tweet(date: str, save: bool):
-    date = pendulum.parse(date, tz="Asia/Tokyo")
+    date = pendulum.parse(date, tz=TZ)
 
     twitter = Twitter()
-    io_handler = S3IOHandler()
+    io_handler = get_io_handler()
     syaroho = Syaroho(twitter, io_handler)
 
     syaroho.fetch_and_save_tweet(date, save)

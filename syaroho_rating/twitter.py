@@ -6,6 +6,7 @@ import pandas as pd
 import pendulum
 import tweepy
 from tweepy import Cursor
+from tweepy.asynchronous import AsyncStream
 from tweepy.models import Status
 
 from syaroho_rating.consts import (
@@ -98,10 +99,9 @@ class Twitter(object):
         return
 
     def listen_and_reply(self, rating_infos, summary_df):
-        listener = Listener(rating_infos, summary_df, self)
-        stream = tweepy.Stream(self.__api.auth, listener)
+        stream = Listener(rating_infos, summary_df, self)
         # 大量のリプに対処するため非同期で処理
-        stream.filter(track=["@" + ACCOUNT_NAME], is_async=True)
+        stream.filter(track=["@" + ACCOUNT_NAME])
 
         # 10分後にストリーミングを終了
         time.sleep(dt.timedelta(minutes=10).total_seconds())
@@ -117,7 +117,7 @@ class Twitter(object):
         return
 
 
-class Listener(tweepy.Stream):
+class Listener(AsyncStream):
     def __init__(
         self, rating_info: Dict, rating_summary: pd.DataFrame, twitter: Twitter
     ):

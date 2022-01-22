@@ -13,4 +13,4 @@ RUN pip install -U pip \
 COPY . /app
 
 ENTRYPOINT [ "python", "main.py" ]
-CMD [ "python", "main.py", "run" ]
+CMD [ "run" ]

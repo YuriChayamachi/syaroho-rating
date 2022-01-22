@@ -7,7 +7,17 @@ from typing import Dict, List, Union
 import boto3
 from botocore.exceptions import ClientError
 
-from syaroho_rating.consts import S3_BUCKET_NAME
+from syaroho_rating.consts import S3_BUCKET_NAME, STORAGE
+
+
+def get_io_handler():
+
+    if STORAGE == "s3":
+        return S3IOHandler()
+    elif STORAGE == "local":
+        return LocalIOHandler()
+    else:
+        raise RuntimeError(f"Unexpected STORAGE variable: {STORAGE}")
 
 
 class IOHandlerBase(object):
@@ -151,10 +161,9 @@ class S3IOHandler(IOHandlerBase):
 
 
 class LocalIOHandler(IOHandlerBase):
-    base_path = Path("data")
-
-    def __init__(self):
+    def __init__(self, base_path: Path = Path("data")):
         super().__init__()
+        self.base_path = base_path
         self.base_path.mkdir(exist_ok=True)
 
     def save_dict(self, dict_obj: Union[Dict, List], relative_path: str):

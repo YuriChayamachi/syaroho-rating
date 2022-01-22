@@ -6,7 +6,7 @@ import pandas as pd
 import pendulum
 import tweepy
 from tweepy import Cursor
-from tweepy.asynchronous import AsyncStream
+from tweepy import Stream
 from tweepy.models import Status
 
 from syaroho_rating.consts import (
@@ -101,7 +101,7 @@ class Twitter(object):
     def listen_and_reply(self, rating_infos, summary_df):
         stream = Listener(rating_infos, summary_df, self)
         # 大量のリプに対処するため非同期で処理
-        stream.filter(track=["@" + ACCOUNT_NAME])
+        stream.filter(track=["@" + ACCOUNT_NAME], threaded=True)
 
         # 10分後にストリーミングを終了
         time.sleep(dt.timedelta(minutes=10).total_seconds())
@@ -117,7 +117,7 @@ class Twitter(object):
         return
 
 
-class Listener(AsyncStream):
+class Listener(Stream):
     def __init__(
         self, rating_info: Dict, rating_summary: pd.DataFrame, twitter: Twitter
     ):
@@ -146,7 +146,7 @@ class Listener(AsyncStream):
             or (delta_second >= reply_patience)
             or (name == ACCOUNT_NAME)
         ):
-            print(f"skip replying to {name}")
+            print(f"skip replying to {name}: {text}")
             return
 
         if (
@@ -161,7 +161,7 @@ class Listener(AsyncStream):
             # 参加者でない場合はスキップ
             name_r = name.replace("@", "＠")
             if not fname.exists():
-                print(f"@{name_r} didn't participated today. skip.")
+                print(f"@{name_r} didn't participate today. skip.")
                 self.replied_list.append(name)
                 return
 
@@ -188,6 +188,9 @@ class Listener(AsyncStream):
                 s_all, media_list=[str(fname)], in_reply_to_status_id=tweet_id
             )
             self.replied_list.append(name)
+            return
+        else:
+            print(f"skip replying to {name}: {text}")
             return
 
 

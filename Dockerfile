@@ -12,5 +12,8 @@ RUN pip install -U pip \
 
 COPY . /app
 
+# force the stdout and stderr streams to be unbuffered
+ENV PYTHONUNBUFFERED=1
+
 ENTRYPOINT [ "python", "main.py" ]
 CMD [ "run" ]

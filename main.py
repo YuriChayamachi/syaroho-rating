@@ -85,5 +85,24 @@ def fetch_tweet(date: str, save: bool):
     syaroho.fetch_and_save_tweet(date, save)
 
 
+@cli.command(hidden=True)
+def test_reply():
+    today = pendulum.today(TZ)
+    twitter = Twitter()
+    io_handler = get_io_handler()
+    syaroho = Syaroho(twitter, io_handler)
+    rating_infos = io_handler.get_rating_info(today)
+
+    from syaroho_rating.rating import summarize_rating_info
+    summary_df = summarize_rating_info(rating_infos)
+    print(summary_df)
+
+    # reply to mentions(10分間実行)
+    print(">>>>> reply")
+    syaroho.reply_to_mentions(summary_df, rating_infos)
+    return
+
+
+
 if __name__ == "__main__":
     cli()

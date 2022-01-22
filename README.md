@@ -2,15 +2,14 @@
 
 しゃろほーレーティングの運営ツールです。
 
-
 ## 使い方
 
 ### 1日分のしゃろほーを観測
 
 次のコマンドを実行すると、日付が変わる時刻まで待ってから1日分のしゃろほーを観測します:
 
-```
-$ python main.py run [--debug]
+```bash
+python main.py run [--debug]
 ```
 
 `--debug` フラグをつけると、日付が変わる時刻まで待たずに観測を行います。
@@ -23,8 +22,8 @@ $ python main.py run [--debug]
 
 次のコマンドで集計を実行できます。
 
-```
-$ python main.py backfill <start_date> <end_date> [--post] [--retweet] [--fetch_tweet]
+```bash
+python main.py backfill <start_date> <end_date> [--post] [--retweet] [--fetch_tweet]
 ```
 
 各オプションの意味は以下のようになります:
@@ -35,15 +34,14 @@ $ python main.py backfill <start_date> <end_date> [--post] [--retweet] [--fetch_
 - **retweet**: このフラグを付けると、本番と同じように、再集計を行った日の優勝者のしゃろほーをTwitterでリツイートします。
 - **fetch_tweet**: このフラグを付けると、当日のツイートを Twitter API を使って収集します。当日分のツイートが保存されている場合は、このフラグを除くことで、Twitter API を節約することができます。
 
-
 ### 過去のしゃろほーツイートの収集と保存
 
 twitter の不具合などでしゃろほーツイートの取得に失敗した日付がある場合、その日付のしゃろほーツイートを取得して保存することができます。
 
 次のコマンドで実行できます:
 
-```
-$ python main.py fetch_tweet <date> [--save]
+```bash
+python main.py fetch-tweet <date> [--save]
 ```
 
 `--save` オプションをつけない場合、取得結果を保存せずに表示だけします。

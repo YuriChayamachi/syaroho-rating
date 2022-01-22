@@ -5,3 +5,5 @@ __pycache__
 graph/
 result_table/
 temp/
+.DS_Store
+data/

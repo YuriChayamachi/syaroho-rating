@@ -84,8 +84,8 @@ if __name__ == "__main__":
     df = pd.DataFrame(data)
     out = get_colorlist(df["Perf"], 4)
 
-    import string
     import random
+    import string
 
     def get_random_string(length):
         letters = string.ascii_lowercase

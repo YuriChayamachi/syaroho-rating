@@ -1,24 +1,25 @@
 import datetime as dt
 import time
-from typing import List, Dict
+from typing import Dict, List
 
 import pandas as pd
 import pendulum
 import tweepy
-from tweepy import Cursor, Status
+from tweepy import Cursor
+from tweepy.models import Status
 
 from syaroho_rating.consts import (
-    invalid_clients,
-    CONSUMER_KEY,
-    CONSUMER_SECRET,
     ACCESS_TOKEN_KEY,
     ACCESS_TOKEN_SECRET,
-    ENVIRONMENT_NAME,
     ACCOUNT_NAME,
+    CONSUMER_KEY,
+    CONSUMER_SECRET,
+    ENVIRONMENT_NAME,
     LIST_SLUG,
+    invalid_clients,
     reply_patience,
 )
-from syaroho_rating.utils import tweetid_to_datetime, classes
+from syaroho_rating.utils import classes, tweetid_to_datetime
 from syaroho_rating.visualize.graph import GraphMaker
 
 
@@ -27,10 +28,20 @@ def is_valid_client(client: str) -> bool:
 
 
 class Twitter(object):
-    def __init__(self):
-        auth = tweepy.OAuthHandler(CONSUMER_KEY, CONSUMER_SECRET)
-        auth.set_access_token(ACCESS_TOKEN_KEY, ACCESS_TOKEN_SECRET)
-        self.api = tweepy.API(auth)
+    def __init__(
+        self,
+        consumer_key=CONSUMER_KEY,
+        consumer_secret=CONSUMER_SECRET,
+        access_token_key=ACCESS_TOKEN_KEY,
+        access_token_secret=ACCESS_TOKEN_SECRET,
+    ):
+        self.__consumer_key = consumer_key
+        self.__consumer_secret = consumer_secret
+        self.__access_token_key = access_token_key
+        self.__access_token_secret = access_token_secret
+        auth = tweepy.OAuthHandler(consumer_key, consumer_secret)
+        auth.set_access_token(access_token_key, access_token_secret)
+        self.__api = tweepy.API(auth)
 
     def fetch_result(self, date) -> List:
         target_date = pendulum.instance(date, "Asia/Tokyo")
@@ -39,8 +50,8 @@ class Twitter(object):
         result = [
             x._json
             for x in Cursor(
-                self.api.search_30_day,
-                environment_name=ENVIRONMENT_NAME,
+                self.__api.search_30_day,
+                label=ENVIRONMENT_NAME,
                 query="しゃろほー",
                 fromDate=from_date.in_tz("utc").strftime("%Y%m%d%H%M"),
                 toDate=to_date.in_tz("utc").strftime("%Y%m%d%H%M"),
@@ -52,7 +63,7 @@ class Twitter(object):
         result = [
             x._json
             for x in Cursor(
-                self.api.list_timeline,
+                self.__api.list_timeline,
                 owner_screen_name=ACCOUNT_NAME,
                 slug=LIST_SLUG,
                 include_rts=False,
@@ -64,13 +75,15 @@ class Twitter(object):
         result = [
             x._json
             for x in Cursor(
-                self.api.list_members, owner_screen_name=ACCOUNT_NAME, slug=LIST_SLUG
+                self.__api.get_list_members,
+                owner_screen_name=ACCOUNT_NAME,
+                slug=LIST_SLUG,
             ).items(1000)
         ]
         return result
 
     def add_members_to_list(self, screen_names: List[str]):
-        self.api.add_list_members(
+        self.__api.add_list_members(
             screen_name=screen_names, slug=LIST_SLUG, owner_screen_name=ACCOUNT_NAME
         )
         return
@@ -78,15 +91,15 @@ class Twitter(object):
     def post_with_multiple_media(self, message: str, media_list: List[str], **kwargs):
         media_ids = []
         for media in media_list:
-            res = self.api.media_upload(media)
+            res = self.__api.media_upload(media)
             media_ids.append(res.media_id)
 
-        self.api.update_status(status=message, media_ids=media_ids, **kwargs)
+        self.__api.update_status(status=message, media_ids=media_ids, **kwargs)
         return
 
     def listen_and_reply(self, rating_infos, summary_df):
         listener = Listener(rating_infos, summary_df, self)
-        stream = tweepy.Stream(self.api.auth, listener)
+        stream = tweepy.Stream(self.__api.auth, listener)
         # 大量のリプに対処するため非同期で処理
         stream.filter(track=["@" + ACCOUNT_NAME], is_async=True)
 
@@ -94,17 +107,26 @@ class Twitter(object):
         time.sleep(dt.timedelta(minutes=10).total_seconds())
         stream.disconnect()
         return
-    
+
     def retweet(self, tweet_id):
-        self.api.retweet(tweet_id)
+        self.__api.retweet(tweet_id)
+        return
+
+    def update_status(self, message):
+        self.__api.update_status(message)
         return
 
 
-class Listener(tweepy.StreamListener):
+class Listener(tweepy.Stream):
     def __init__(
         self, rating_info: Dict, rating_summary: pd.DataFrame, twitter: Twitter
     ):
-        super().__init__(api=twitter.api)
+        super().__init__(
+            consumer_key=CONSUMER_KEY,
+            consumer_secret=CONSUMER_SECRET,
+            access_token=ACCESS_TOKEN_KEY,
+            access_token_secret=ACCESS_TOKEN_SECRET,
+        )
         self.rating_info = rating_info
         self.rating_summary = rating_summary.reset_index().set_index("User")
         self.twitter = twitter

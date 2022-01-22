@@ -38,7 +38,9 @@ class IOHandlerBase(object):
 
         # 同じ日付のファイルが複数ある場合は統合する
         file_list = self.list_path(dirname)
-        target_files = [f_path for f_path in file_list if date_str in f_path]
+        target_files = [
+            f_path for f_path in file_list if f"{dirname}/{date_str}" in f_path
+        ]
         results = []
         for f_path in target_files:
             statuses_dict = self.load_dict(f_path)
@@ -137,8 +139,14 @@ class S3IOHandler(IOHandlerBase):
 
     def list_path(self, relative_path: str):
         """バケットルートからの相対パスのリストを返す"""
-        res = self.s3.list_objects(Bucket=S3_BUCKET_NAME, Prefix=relative_path)
-        obj_list = [c["Key"] for c in res.get("Contents", [])]
+        # use paginator since list_object only returns maximum 1000 objects
+        paginator = self.s3.get_paginator("list_objects")
+        res_iterator = paginator.paginate(
+            Bucket=S3_BUCKET_NAME, Prefix=relative_path, MaxKeys=1000000
+        )
+        obj_list = []
+        for res in res_iterator:
+            obj_list += [c["Key"] for c in res.get("Contents", [])]
         return obj_list
 
 

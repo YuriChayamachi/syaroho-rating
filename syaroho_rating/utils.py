@@ -5,7 +5,7 @@ from typing import Union
 import numpy as np
 import pendulum
 
-from syaroho_rating.consts import class_list, table_bg_colors, graph_colors
+from syaroho_rating.consts import class_list, graph_colors, table_bg_colors
 
 
 # 最高レーティングから段位を返す関数

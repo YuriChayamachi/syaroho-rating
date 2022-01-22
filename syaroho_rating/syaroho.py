@@ -1,10 +1,11 @@
-from typing import List, Dict, Tuple
+from os import EX_USAGE
+from typing import Dict, List, Tuple
 
 import pandas as pd
 import pendulum
 
 from syaroho_rating.io_handler import IOHandlerBase
-from syaroho_rating.rating import Rating
+from syaroho_rating.rating import calc_rating_for_date, summarize_rating_info
 from syaroho_rating.twitter import Twitter, is_valid_client
 from syaroho_rating.utils import clean_html_tag, timedelta_to_ms, tweetid_to_datetime
 from syaroho_rating.visualize.graph import GraphMaker
@@ -85,7 +86,7 @@ class Syaroho(object):
             print("no new members.")
         return
 
-    def pre_observe(self, do_post: bool = False):
+    def run_dq(self, do_post: bool = False):
         today = pendulum.today("Asia/Tokyo")
         statuses = self._fetch_and_save_result_dq(today)
         posts = filter_and_sort(statuses, today)
@@ -99,18 +100,44 @@ class Syaroho(object):
 
         message = "\n".join(messages)
         if do_post:
-            self.twitter.api.update_status(message)
+            self.twitter.update_status(message)
         return statuses
 
-    def observe(
-        self, dq_statuses: List, do_post: bool = False, do_retweet: bool = False
+    def run(
+        self,
+        date: pendulum.date,
+        dq_statuses: List,
+        fetch_tweet: bool = True,
+        do_post: bool = False,
+        do_retweet: bool = False,
+        exag: float = 1.0,
     ) -> Tuple[pd.DataFrame, Dict]:
-        today = pendulum.today("Asia/Tokyo")
-        statuses = self._fetch_and_save_result(today)
+        if fetch_tweet:
+            print(f"Fetching tweets of date {date} ...")
+            statuses = self._fetch_and_save_result(date)
+            print(f"Loaded {len(statuses)} tweets.")
+        else:
+            print(f"Loading tweets of date {date} from storage ...")
+            statuses = self.io.get_statuses(date)
+            print(f"Loaded {len(statuses)} tweets.")
 
-        # calc ratings
-        rtg = Rating(io_handler=self.io)
-        daily_ratings = rtg.calc_rating_for_date(today, statuses, dq_statuses)
+        # 前日のレーティング結果を読み込む
+        try:
+            print(f"Loading previous rating infos...")
+            prev_rating_infos = self.io.get_rating_info(date.subtract(days=1))
+            print(f"Loaded previous rating containing {len(prev_rating_infos)} rows.")
+        except FileNotFoundError:
+            print("No prev rating info found. Use empty list instead.")
+            prev_rating_infos = dict()
+
+        # 当日のレーティングを計算
+        print(f"Calculating rating for date {date}...")
+        daily_ratings, rating_infos = calc_rating_for_date(
+            date, statuses, dq_statuses, prev_rating_infos, exag
+        )
+        print(f"Saving rating info...")
+        self.io.save_rating_info(rating_infos, date)
+        print("Done.")
 
         # convert rating results to dataframe
         pd.options.display.notebook_repr_html = True
@@ -125,33 +152,45 @@ class Syaroho(object):
                 "change": "Change",
             }
         )
+        print(f">>>>>>>>>> The Result for date {date} >>>>>>>>>>")
         print(df)
         df = df.sort_values("Rank").reset_index(drop=True)
         df_result = df[["Rank", "Name", "Record", "Perf.", "Rating", "Change"]]
-
-        if do_retweet:
-            self._retweet_winners(df)
-
-        # make table for result tweet
-        tm = TableMaker(df_result, today)
-        table_paths = tm.make()
-        table_paths = [str(p) for p in table_paths]
-
-        # create graphs for reply
-        rtg = Rating(io_handler=self.io)
-        summary_df, rating_infos = rtg.get_summary_dataframe_and_infos(today)
-        attend_users = [u["screen_name"] for u in daily_ratings]
-        gm = GraphMaker(rating_infos)
-        gm.draw_graph_users(attend_users)
+        print(df_result)
+        print(f"<<<<<<<<<< The Result for date {date} <<<<<<<<<<")
 
         # add members
+        print(f"Adding today's participants to member list...")
         all_members = self._fetch_and_save_member()
         self._add_new_member(statuses, all_members)
+        print("Done.")
 
-        # ツイートからリプライ受付までの時間が短くなるよう最後にツイート処理を行う
+        if do_retweet:
+            print("Retweeting winner's status...")
+            self._retweet_winners(df)
+            print("Done.")
+
         if do_post:
+            # make table for result tweet
+            print("Creating result table...")
+            tm = TableMaker(df_result, date)
+            table_paths = tm.make()
+            table_paths = [str(p) for p in table_paths]
+            print("Done.")
+
+            print("Posting today's result...")
             message = tm._make_header()
             self.twitter.post_with_multiple_media(message, table_paths)
+            print("Created table paths: ", table_paths)
+            print("Done.")
+
+            # create graphs for reply
+            print("Creating result graph for each participants...")
+            summary_df = summarize_rating_info(rating_infos)
+            attend_users = [u["screen_name"] for u in daily_ratings]
+            gm = GraphMaker(rating_infos)
+            gm.draw_graph_users(attend_users)
+            print("Done.")
 
         return summary_df, rating_infos
 
@@ -165,13 +204,32 @@ class Syaroho(object):
         self.twitter.listen_and_reply(rating_infos, summary_df)
         return
 
+    def backfill(
+        self,
+        start_date: pendulum.date,
+        end_date: pendulum.date,
+        do_post: bool = False,
+        do_retweet: bool = False,
+        fetch_tweet: bool = False,
+        exag_start: bool = False,
+    ):
+        for i, date in enumerate(pendulum.period(start_date, end_date).range("days")):
+            print(f"Executing backfill for {date}...")
+            try:
+                dq_statuses = self.io.get_statuses_dq(date)
+            except FileNotFoundError:
+                print("no status_dq file found")
+                dq_statuses = []
+                pass
+            if i == 0 and exag_start:
+                self.run(date, dq_statuses, fetch_tweet, do_post, do_retweet, exag=1.5)
+            else:
+                self.run(date, dq_statuses, fetch_tweet, do_post, do_retweet)
+        print("done.")
 
-if __name__ == "__main__":
-    # test
-    from syaroho_rating.io_handler import LocalIOHandler
-
-    today = pendulum.datetime(2020, 5, 6, tz="Asia/Tokyo")
-    io_handler = LocalIOHandler()
-    rtg = Rating(io_handler=io_handler)
-    summary_df, rating_infos = rtg.get_summary_dataframe_and_infos(today)
-    print(summary_df)
+    def fetch_and_save_tweet(self, date, save: bool = False):
+        result = self.twitter.fetch_result(date)
+        print(result)
+        if save:
+            self.io.save_statuses(result, date)
+        return

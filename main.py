@@ -1,5 +1,6 @@
 import time
 
+import click
 import pendulum
 
 from syaroho_rating.consts import DO_POST, DO_RETWEET, DEBUG
@@ -10,7 +11,14 @@ from syaroho_rating.twitter import Twitter
 TZ = "Asia/Tokyo"
 
 
-def main(debug=False):
+@click.group()
+def cli():
+    pass
+
+
+@cli.command()
+@click.option("--debug", is_flag=True, type=bool)
+def run(debug=False):
     """0時0分JSTに呼ばれる"""
     twitter = Twitter()
     io_handler = S3IOHandler()
@@ -25,8 +33,8 @@ def main(debug=False):
             time.sleep(dur.total_seconds())
 
     # pre observe
-    print("pre observe")
-    dq_statuses = syaroho.pre_observe(do_post=DO_POST)
+    print(">>>>> pre observe")
+    dq_statuses = syaroho.run_dq(do_post=DO_POST)
 
     # wait until 00:02:00 JST
     if not debug:
@@ -35,14 +43,48 @@ def main(debug=False):
             time.sleep(dur.total_seconds())
 
     # observe
-    print("observe")
-    summary_df, rating_infos = syaroho.observe(dq_statuses, do_post=DO_POST, do_retweet=DO_RETWEET)
+    print(">>>>> observe")
+    summary_df, rating_infos = syaroho.run(today, dq_statuses, fetch_tweet=True, 
+                                           do_post=DO_POST, do_retweet=DO_RETWEET)
 
     # reply to mentions(10分間実行)
-    print("reply")
+    print(">>>>> reply")
     syaroho.reply_to_mentions(summary_df, rating_infos)
     return
 
 
+@cli.command()
+@click.argument("start", type=str)
+@click.argument("end", type=str)
+@click.option("--eg-start", is_flag=True, type=bool)
+@click.option("--fetch-tweet", is_flag=True, type=bool)
+@click.option("--post", is_flag=True, type=bool)
+@click.option("--retweet", is_flag=True, type=bool)
+def backfill(start: str, end: str, eg_start: bool, fetch_tweet: bool,
+             post: bool, retweet: bool):
+    start_date = pendulum.parse(start, tz="Asia/Tokyo")
+    end_date = pendulum.parse(end, tz="Asia/Tokyo")
+
+    twitter = Twitter()
+    io_handler = S3IOHandler()
+    syaroho = Syaroho(twitter, io_handler)
+
+    syaroho.backfill(start_date, end_date, post, retweet, fetch_tweet, eg_start)
+    return
+
+
+@cli.command()
+@click.argument("date", type=str)
+@click.option("--save", is_flag=True, type=bool)
+def fetch_tweet(date: str, save: bool):
+    date = pendulum.parse(date, tz="Asia/Tokyo")
+
+    twitter = Twitter()
+    io_handler = S3IOHandler()
+    syaroho = Syaroho(twitter, io_handler)
+
+    syaroho.fetch_and_save_tweet(date, save)
+
+
 if __name__ == "__main__":
-    main(debug=DEBUG)
+    cli()

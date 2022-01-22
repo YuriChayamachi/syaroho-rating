@@ -9,7 +9,7 @@ from matplotlib.font_manager import FontProperties
 from matplotlib.ticker import FuncFormatter
 
 from syaroho_rating.consts import graph_colors, month_name
-from syaroho_rating.utils import colors, classes
+from syaroho_rating.utils import classes, colors
 
 fp = FontProperties(
     fname="syaroho_rating/font/NotoSansCJK-Regular.ttc",

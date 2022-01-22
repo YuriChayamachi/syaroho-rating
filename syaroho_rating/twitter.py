@@ -94,6 +94,10 @@ class Twitter(object):
         time.sleep(dt.timedelta(minutes=10).total_seconds())
         stream.disconnect()
         return
+    
+    def retweet(self, tweet_id):
+        self.api.retweet(tweet_id)
+        return
 
 
 class Listener(tweepy.StreamListener):

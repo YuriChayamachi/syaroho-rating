@@ -158,7 +158,7 @@ class Syaroho(object):
     def _retweet_winners(self, df_ratings: pd.DataFrame):
         df_top = df_ratings[df_ratings["Rank"] == 1].reset_index()
         for i, row in df_top.iterrows():
-            self.twitter.api.retweet(row.id)
+            self.twitter.retweet(row.id)
         return
 
     def reply_to_mentions(self, summary_df: pd.DataFrame, rating_infos: Dict):

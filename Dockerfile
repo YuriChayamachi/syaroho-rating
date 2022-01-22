@@ -1,4 +1,4 @@
-FROM python:3.8-slim
+FROM python:3.9-slim
 
 RUN apt-get update \
     && apt-get install -y git \
@@ -8,7 +8,6 @@ WORKDIR /app
 COPY requirements.txt /app
 RUN pip install -U pip \
     && pip install -r requirements.txt \
-    && pip install git+https://github.com/tweepy/tweepy.git \
     && rm -rf ~/.cache/pip
 
 COPY . /app

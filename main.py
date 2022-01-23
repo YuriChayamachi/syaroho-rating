@@ -5,6 +5,7 @@ import pendulum
 
 from syaroho_rating.consts import DO_POST, DO_RETWEET, DEBUG
 from syaroho_rating.io_handler import get_io_handler
+from syaroho_rating.slack import SlackNotifier
 from syaroho_rating.syaroho import Syaroho
 from syaroho_rating.twitter import Twitter
 
@@ -19,36 +20,49 @@ def cli():
 @cli.command()
 def run():
     """0時0分JSTに呼ばれる"""
+    slack = SlackNotifier()
+
     twitter = Twitter()
     io_handler = get_io_handler()
     syaroho = Syaroho(twitter, io_handler)
 
     today = pendulum.today(TZ)
+    today_str = today.strftime("%Y-%m-%d")
 
-    # wait until 00:00:05 JST
-    if not DEBUG:
-        dur = pendulum.now(TZ) - today.replace(second=5)
-        if dur.total_seconds() > 0:
-            time.sleep(dur.total_seconds())
+    slack.notify_info(title=f"{today_str} しゃろほー観測開始", text="")
 
-    # pre observe
-    print(">>>>> pre observe")
-    dq_statuses = syaroho.run_dq(do_post=DO_POST)
+    try:
+        # wait until 00:00:05 JST
+        if not DEBUG:
+            dur = pendulum.now(TZ) - today.replace(second=5)
+            if dur.total_seconds() > 0:
+                time.sleep(dur.total_seconds())
 
-    # wait until 00:02:00 JST
-    if not DEBUG:
-        dur = pendulum.now(TZ) - today.replace(minute=2)
-        if dur.total_seconds() > 0:
-            time.sleep(dur.total_seconds())
+        # pre observe
+        print(">>>>> pre observe")
+        dq_statuses = syaroho.run_dq(do_post=DO_POST)
 
-    # observe
-    print(">>>>> observe")
-    summary_df, rating_infos = syaroho.run(today, dq_statuses, fetch_tweet=True, 
-                                           do_post=DO_POST, do_retweet=DO_RETWEET)
+        # wait until 00:02:00 JST
+        if not DEBUG:
+            dur = pendulum.now(TZ) - today.replace(minute=2)
+            if dur.total_seconds() > 0:
+                time.sleep(dur.total_seconds())
 
-    # reply to mentions(10分間実行)
-    print(">>>>> reply")
-    syaroho.reply_to_mentions(summary_df, rating_infos)
+        # observe
+        print(">>>>> observe")
+        summary_df, rating_infos = syaroho.run(today, dq_statuses, fetch_tweet=True, 
+                                            do_post=DO_POST, do_retweet=DO_RETWEET)
+
+        # reply to mentions(10分間実行)
+        print(">>>>> reply")
+        syaroho.reply_to_mentions(summary_df, rating_infos)
+        slack.notify_success(title=f"{today_str} しゃろほー観測完了", text="")
+    except:
+        import traceback
+        trace = traceback.format_exc()
+        slack.notify_failed(title=f"{today_str} しゃろほーでエラー発生", text=trace)
+        raise
+
     return
 
 

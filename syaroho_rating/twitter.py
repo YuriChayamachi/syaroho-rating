@@ -5,8 +5,7 @@ from typing import Dict, List
 import pandas as pd
 import pendulum
 import tweepy
-from tweepy import Cursor
-from tweepy import Stream
+from tweepy import Cursor, Stream
 from tweepy.models import Status
 
 from syaroho_rating.consts import (

@@ -3,6 +3,7 @@ from typing import Dict, List, Tuple
 
 import pandas as pd
 import pendulum
+from tweepy.errors import Forbidden
 
 from syaroho_rating.io_handler import IOHandlerBase
 from syaroho_rating.rating import calc_rating_for_date, summarize_rating_info
@@ -186,18 +187,26 @@ class Syaroho(object):
 
             # create graphs for reply
             print("Creating result graph for each participants...")
-            summary_df = summarize_rating_info(rating_infos)
             attend_users = [u["screen_name"] for u in daily_ratings]
             gm = GraphMaker(rating_infos)
             gm.draw_graph_users(attend_users)
             print("Done.")
+
+        print("Summarizing result...")
+        summary_df = summarize_rating_info(rating_infos)
+        print("Done.")
 
         return summary_df, rating_infos
 
     def _retweet_winners(self, df_ratings: pd.DataFrame):
         df_top = df_ratings[df_ratings["Rank"] == 1].reset_index()
         for i, row in df_top.iterrows():
-            self.twitter.retweet(row.id)
+            try:
+                print(f"Retweeting tweet id {row.id}")
+                self.twitter.retweet(row.id)
+            except Forbidden as e:
+                print(e)
+                print(f"Retweet is not permissive for user {row.id}. Skip.")
         return
 
     def reply_to_mentions(self, summary_df: pd.DataFrame, rating_infos: Dict):

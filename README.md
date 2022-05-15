@@ -23,7 +23,7 @@ python main.py run [--debug]
 次のコマンドで集計を実行できます。
 
 ```bash
-python main.py backfill <start_date> <end_date> [--post] [--retweet] [--fetch_tweet]
+python main.py backfill <start_date> <end_date> [--post] [--retweet] [--fetch-tweet]
 ```
 
 各オプションの意味は以下のようになります:
@@ -32,7 +32,7 @@ python main.py backfill <start_date> <end_date> [--post] [--retweet] [--fetch_tw
 - **end_date**: 集計を終了する日付。`2022-01-01` のような形式で入力します。この日付も集計される期間に含まれます。
 - **post**: このフラグを付けると、本番と同じように、再集計を行った日付のランクをTwitterでつぶやきます。
 - **retweet**: このフラグを付けると、本番と同じように、再集計を行った日の優勝者のしゃろほーをTwitterでリツイートします。
-- **fetch_tweet**: このフラグを付けると、当日のツイートを Twitter API を使って収集します。当日分のツイートが保存されている場合は、このフラグを除くことで、Twitter API を節約することができます。
+- **fetch-tweet**: このフラグを付けると、当日のツイートを Twitter API を使って収集します。当日分のツイートが保存されている場合は、このフラグを除くことで、Twitter API を節約することができます。
 
 ### 過去のしゃろほーツイートの収集と保存
 

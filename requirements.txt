@@ -7,3 +7,4 @@ pendulum==2.1.2
 tweepy==4.4.0
 click==8.0.3
 slackweb==1.0.5
+tenacity==8.1.0

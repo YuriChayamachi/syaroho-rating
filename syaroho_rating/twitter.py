@@ -5,6 +5,7 @@ from typing import Dict, List
 import pandas as pd
 import pendulum
 import tweepy
+from tenacity import retry, wait_exponential
 from tweepy import Cursor, Stream
 from tweepy.models import Status
 
@@ -43,6 +44,7 @@ class Twitter(object):
         auth.set_access_token(access_token_key, access_token_secret)
         self.__api = tweepy.API(auth)
 
+    @retry(wait=wait_exponential(multiplier=1, min=1, max=60))
     def fetch_result(self, date) -> List:
         target_date = pendulum.instance(date, "Asia/Tokyo")
         from_date = target_date.subtract(minutes=1)
@@ -59,6 +61,7 @@ class Twitter(object):
         ]
         return result
 
+    @retry(wait=wait_exponential(multiplier=1, min=1, max=60))
     def fetch_result_dq(self) -> List:
         result = [
             x._json
@@ -71,6 +74,7 @@ class Twitter(object):
         ]
         return result
 
+    @retry(wait=wait_exponential(multiplier=1, min=1, max=60))
     def fetch_member(self) -> List:
         result = [
             x._json
@@ -82,12 +86,14 @@ class Twitter(object):
         ]
         return result
 
+    @retry(wait=wait_exponential(multiplier=1, min=1, max=60))
     def add_members_to_list(self, screen_names: List[str]):
         self.__api.add_list_members(
             screen_name=screen_names, slug=LIST_SLUG, owner_screen_name=ACCOUNT_NAME
         )
         return
 
+    @retry(wait=wait_exponential(multiplier=1, min=1, max=60))
     def post_with_multiple_media(self, message: str, media_list: List[str], **kwargs):
         media_ids = []
         for media in media_list:
@@ -107,10 +113,12 @@ class Twitter(object):
         stream.disconnect()
         return
 
+    @retry(wait=wait_exponential(multiplier=1, min=1, max=60))
     def retweet(self, tweet_id):
         self.__api.retweet(tweet_id)
         return
 
+    @retry(wait=wait_exponential(multiplier=1, min=1, max=60))
     def update_status(self, message):
         self.__api.update_status(message)
         return

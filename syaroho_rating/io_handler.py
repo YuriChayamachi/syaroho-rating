@@ -6,6 +6,7 @@ from typing import Dict, List, Union
 
 import boto3
 from botocore.exceptions import ClientError
+from tenacity import retry, wait_exponential
 
 from syaroho_rating.consts import S3_BUCKET_NAME, STORAGE
 
@@ -123,6 +124,7 @@ class S3IOHandler(IOHandlerBase):
         self.s3 = boto3.client("s3")
         self.temp_dir.mkdir(exist_ok=True)
 
+    @retry(wait=wait_exponential(multiplier=1, min=1, max=10))
     def save_dict(self, dict_obj: Union[Dict, List], relative_path: str):
         temp_path = self.temp_dir / f"{uuid.uuid4()}.json"
         with temp_path.open("w") as f:
@@ -132,6 +134,7 @@ class S3IOHandler(IOHandlerBase):
         temp_path.unlink(missing_ok=True)
         return
 
+    @retry(wait=wait_exponential(multiplier=1, min=1, max=10))
     def load_dict(self, relative_path: str):
         temp_path = self.temp_dir / f"{uuid.uuid4()}.json"
         with temp_path.open("wb") as f:
@@ -147,6 +150,7 @@ class S3IOHandler(IOHandlerBase):
     def delete(self, relative_path: str):
         raise NotImplementedError
 
+    @retry(wait=wait_exponential(multiplier=1, min=1, max=10))
     def list_path(self, relative_path: str):
         """バケットルートからの相対パスのリストを返す"""
         # use paginator since list_object only returns maximum 1000 objects

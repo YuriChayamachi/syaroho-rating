@@ -25,7 +25,7 @@ class GraphMaker(object):
         # self.history_data[usr_name]["attend_date"] = [date1, ...]
         self.rating_history = rating_history
 
-    def draw_graph_and_save(self, user_name) -> Path:
+    def draw_graph_and_save(self, user_name: str) -> None:
         attend_dates = [
             dt.datetime.strptime(d, "%Y/%m/%d")
             for d in self.rating_history[user_name]["attend_date"]

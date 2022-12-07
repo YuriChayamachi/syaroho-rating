@@ -25,11 +25,11 @@ def is_valid_client(client: str) -> bool:
 class Twitter(object):
     def __init__(
         self,
-        consumer_key=CONSUMER_KEY,
-        consumer_secret=CONSUMER_SECRET,
-        access_token_key=ACCESS_TOKEN_KEY,
-        access_token_secret=ACCESS_TOKEN_SECRET,
-    ):
+        consumer_key: str = CONSUMER_KEY,
+        consumer_secret: str = CONSUMER_SECRET,
+        access_token_key: str = ACCESS_TOKEN_KEY,
+        access_token_secret: str = ACCESS_TOKEN_SECRET,
+    ) -> None:
         self.__consumer_key = consumer_key
         self.__consumer_secret = consumer_secret
         self.__access_token_key = access_token_key
@@ -39,7 +39,9 @@ class Twitter(object):
         self.__api = tweepy.API(auth)
 
     @retry(wait=wait_exponential(multiplier=1, min=1, max=60))
-    def fetch_result(self, date) -> Tuple[List[Tweet], List[Dict[str, Any]]]:
+    def fetch_result(
+        self, date: pendulum.DateTime
+    ) -> Tuple[List[Tweet], List[Dict[str, Any]]]:
         target_date = pendulum.instance(date, "Asia/Tokyo")
         from_date = target_date.subtract(minutes=1)
         to_date = target_date.add(minutes=1)
@@ -84,14 +86,16 @@ class Twitter(object):
         return users, raw_response
 
     @retry(wait=wait_exponential(multiplier=1, min=1, max=60))
-    def add_members_to_list(self, screen_names: List[str]):
+    def add_members_to_list(self, screen_names: List[str]) -> None:
         self.__api.add_list_members(
             screen_name=screen_names, slug=LIST_SLUG, owner_screen_name=ACCOUNT_NAME
         )
         return
 
     @retry(wait=wait_exponential(multiplier=1, min=1, max=60))
-    def post_with_multiple_media(self, message: str, media_list: List[str], **kwargs):
+    def post_with_multiple_media(
+        self, message: str, media_list: List[str], **kwargs: Any
+    ) -> None:
         media_ids = []
         for media in media_list:
             res = self.__api.media_upload(media)
@@ -100,7 +104,9 @@ class Twitter(object):
         self.__api.update_status(status=message, media_ids=media_ids, **kwargs)
         return
 
-    def listen_and_reply(self, rating_infos, summary_df):
+    def listen_and_reply(
+        self, rating_infos: Dict[str, Any], summary_df: pd.DataFrame
+    ) -> None:
         stream = Listener(rating_infos, summary_df, self)
         # 大量のリプに対処するため非同期で処理
         stream.filter(track=["@" + ACCOUNT_NAME], threaded=True)
@@ -111,20 +117,23 @@ class Twitter(object):
         return
 
     @retry(wait=wait_exponential(multiplier=1, min=1, max=60))
-    def retweet(self, tweet_id):
+    def retweet(self, tweet_id: str) -> None:
         self.__api.retweet(tweet_id)
         return
 
     @retry(wait=wait_exponential(multiplier=1, min=1, max=60))
-    def update_status(self, message):
+    def update_status(self, message: str) -> None:
         self.__api.update_status(message)
         return
 
 
 class Listener(Stream):
     def __init__(
-        self, rating_info: Dict, rating_summary: pd.DataFrame, twitter: Twitter
-    ):
+        self,
+        rating_info: Dict[str, Any],
+        rating_summary: pd.DataFrame,
+        twitter: Twitter,
+    ) -> None:
         super().__init__(
             consumer_key=CONSUMER_KEY,
             consumer_secret=CONSUMER_SECRET,
@@ -134,9 +143,9 @@ class Listener(Stream):
         self.rating_info = rating_info
         self.rating_summary = rating_summary.reset_index().set_index("User")
         self.twitter = twitter
-        self.replied_list = []
+        self.replied_list: List[str] = []
 
-    def on_status(self, status: Status):
+    def on_status(self, status: Status) -> None:
         name_jp = status.author.name
         name = status.author.screen_name
         tweet_id = str(status.id)

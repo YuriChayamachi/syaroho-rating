@@ -12,7 +12,7 @@ from syaroho_rating.utils import clean_html_tag, timedelta_to_ms
 
 
 def calc_rating_for_date(
-    date: pendulum.date,
+    date: pendulum.DateTime,
     statuses: List[Tweet],
     dq_statuses: List[Tweet],
     rating_infos: Dict,
@@ -89,7 +89,7 @@ def calc_rating_for_date(
                         "perf": -1,
                         "time": time,
                         "score": score,
-                        "id": r["id"],
+                        "id": s.id,
                     }
                 )
 

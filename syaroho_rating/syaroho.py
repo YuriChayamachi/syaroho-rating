@@ -14,7 +14,7 @@ from syaroho_rating.visualize.graph import GraphMaker
 from syaroho_rating.visualize.table import TableMaker
 
 
-def filter_and_sort(statuses: List[Tweet], date: pendulum.date) -> List[Dict]:
+def filter_and_sort(statuses: List[Tweet], date: pendulum.DateTime) -> List[Dict]:
     # 参加者リストの作成
     participants = []
     for s in statuses:
@@ -48,13 +48,13 @@ class Syaroho(object):
         self.twitter = twitter_api
         self.io = io_handler
 
-    def _fetch_and_save_result(self, date) -> List[Tweet]:
+    def _fetch_and_save_result(self, date: pendulum.DateTime) -> List[Tweet]:
         statuses, raw_response = self.twitter.fetch_result(date)
 
         self.io.save_statuses(raw_response, date)
         return statuses
 
-    def _fetch_and_save_result_dq(self, date) -> List[Tweet]:
+    def _fetch_and_save_result_dq(self, date: pendulum.DateTime) -> List[Tweet]:
         statuses, raw_response = self.twitter.fetch_result_dq()
 
         self.io.save_statuses_dq(raw_response, date)
@@ -66,7 +66,7 @@ class Syaroho(object):
         self.io.save_members(raw_rasponse)
         return users
 
-    def _add_new_member(self, statuses: List[Tweet], users: List[User]):
+    def _add_new_member(self, statuses: List[Tweet], users: List[User]) -> None:
         existing_user_names = [u.username for u in users]
 
         competitor_names = [
@@ -86,7 +86,7 @@ class Syaroho(object):
             print("no new members.")
         return
 
-    def run_dq(self, do_post: bool = False):
+    def run_dq(self, do_post: bool = False) -> List[Tweet]:
         today = pendulum.today("Asia/Tokyo")
         statuses = self._fetch_and_save_result_dq(today)
         posts = filter_and_sort(statuses, today)
@@ -105,7 +105,7 @@ class Syaroho(object):
 
     def run(
         self,
-        date: pendulum.date,
+        date: pendulum.DateTime,
         dq_statuses: List[Tweet],
         fetch_tweet: bool = True,
         do_post: bool = False,
@@ -118,7 +118,7 @@ class Syaroho(object):
             print(f"Loaded {len(statuses)} tweets.")
         else:
             print(f"Loading tweets of date {date} from storage ...")
-            statuses = self.io.get_statuses(date)
+            statuses = self.io.get_statuses_v1(date)
             print(f"Loaded {len(statuses)} tweets.")
 
         # 前日のレーティング結果を読み込む
@@ -197,7 +197,7 @@ class Syaroho(object):
 
         return summary_df, rating_infos
 
-    def _retweet_winners(self, df_ratings: pd.DataFrame):
+    def _retweet_winners(self, df_ratings: pd.DataFrame) -> None:
         df_top = df_ratings[df_ratings["Rank"] == 1].reset_index()
         for i, row in df_top.iterrows():
             try:
@@ -208,23 +208,23 @@ class Syaroho(object):
                 print(f"Retweet is not permissive for user {row.id}. Skip.")
         return
 
-    def reply_to_mentions(self, summary_df: pd.DataFrame, rating_infos: Dict):
+    def reply_to_mentions(self, summary_df: pd.DataFrame, rating_infos: Dict) -> None:
         self.twitter.listen_and_reply(rating_infos, summary_df)
         return
 
     def backfill(
         self,
-        start_date: pendulum.date,
-        end_date: pendulum.date,
+        start_date: pendulum.DateTime,
+        end_date: pendulum.DateTime,
         do_post: bool = False,
         do_retweet: bool = False,
         fetch_tweet: bool = False,
         exag_start: bool = False,
-    ):
+    ) -> None:
         for i, date in enumerate(pendulum.period(start_date, end_date).range("days")):
             print(f"Executing backfill for {date}...")
             try:
-                dq_statuses = self.io.get_statuses_dq(date)
+                dq_statuses = self.io.get_statuses_dq_v1(date)
             except FileNotFoundError:
                 print("no status_dq file found")
                 dq_statuses = []
@@ -235,7 +235,7 @@ class Syaroho(object):
                 self.run(date, dq_statuses, fetch_tweet, do_post, do_retweet)
         print("done.")
 
-    def fetch_and_save_tweet(self, date, save: bool = False):
+    def fetch_and_save_tweet(self, date: pendulum.DateTime, save: bool = False) -> None:
         _, raw_response = self.twitter.fetch_result(date)
         print(raw_response)
         if save:

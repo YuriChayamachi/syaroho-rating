@@ -2,16 +2,17 @@ import datetime as dt
 import json
 import uuid
 from pathlib import Path
-from typing import Dict, List, Union
+from typing import Any, Dict, List, Union
 
 import boto3
 from botocore.exceptions import ClientError
 from tenacity import retry, wait_exponential
 
 from syaroho_rating.consts import S3_BUCKET_NAME, STORAGE
+from syaroho_rating.model import Tweet
 
 
-def get_io_handler():
+def get_io_handler() -> "IOHandlerBase":
 
     if STORAGE == "s3":
         return S3IOHandler()
@@ -27,23 +28,23 @@ class IOHandlerBase(object):
     # base operations #
     ###################
 
-    def save_dict(self, dict_obj: Union[Dict, List], relative_path: str):
+    def save_dict(self, dict_obj: Union[Dict, List], relative_path: str) -> None:
         raise NotImplementedError
 
-    def load_dict(self, relative_path: str):
+    def load_dict(self, relative_path: str) -> Dict[str, Any]:
         raise NotImplementedError
 
-    def delete(self, relative_path: str):
+    def delete(self, relative_path: str) -> None:
         raise NotImplementedError
 
-    def list_path(self, relative_path: str):
+    def list_path(self, relative_path: str) -> List[Any]:
         raise NotImplementedError
 
     #######################
     # concrete operations #
     #######################
 
-    def get_statuses(self, date: dt.date):
+    def get_statuses_v1(self, date: dt.date) -> List[Tweet]:
         dirname = "statuses"
         date_str = date.strftime("%Y%m%d")  # like 20200101
 
@@ -56,9 +57,10 @@ class IOHandlerBase(object):
         for f_path in target_files:
             statuses_dict = self.load_dict(f_path)
             results += statuses_dict["results"]
-        return results
+        tweets = Tweet.from_responses_v1(results)
+        return tweets
 
-    def save_statuses(self, statuses: List, date: dt.date):
+    def save_statuses(self, statuses: List, date: dt.date) -> None:
         dirname = "statuses"
         date_str = date.strftime("%Y%m%d")  # like 20200101
 
@@ -69,15 +71,16 @@ class IOHandlerBase(object):
         self.save_dict(statuses_dict, f"{dirname}/{filename}")
         return
 
-    def get_statuses_dq(self, date: dt.date):
+    def get_statuses_dq_v1(self, date: dt.date) -> List[Tweet]:
         dirname = "statuses_dq"
         date_str = date.strftime("%Y%m%d")  # like 20200101
 
         filename = f"{date_str}.json"
-        statuses = self.load_dict(f"{dirname}/{filename}")
-        return statuses
+        raw_statuses = self.load_dict(f"{dirname}/{filename}")
+        tweets = Tweet.from_responses_v1(raw_statuses)
+        return tweets
 
-    def save_statuses_dq(self, statuses: List, date: dt.date):
+    def save_statuses_dq(self, statuses: List, date: dt.date) -> None:
         dirname = "statuses_dq"
         date_str = date.strftime("%Y%m%d")  # like 20200101
 
@@ -85,13 +88,13 @@ class IOHandlerBase(object):
         self.save_dict(statuses, f"{dirname}/{filename}")
         return
 
-    def get_members(self):
+    def get_members(self) -> List[Dict[str, Any]]:
         dirname = "member"
         filename = "member.json"
         members_dict = self.load_dict(f"{dirname}/{filename}")
         return members_dict["users"]
 
-    def save_members(self, members: List):
+    def save_members(self, members: List) -> None:
         dirname = "member"
         filename = "member.json"
 
@@ -101,14 +104,14 @@ class IOHandlerBase(object):
         self.save_dict(members_dict, f"{dirname}/{filename}")
         return
 
-    def get_rating_info(self, date: dt.date):
+    def get_rating_info(self, date: dt.date) -> Dict[str, Any]:
         dirname = "rating_info"
         date_str = date.strftime("%Y%m%d")  # like 20200101
         filename = f"{date_str}.json"
         rating_info = self.load_dict(f"{dirname}/{filename}")
         return rating_info
 
-    def save_rating_info(self, rating_info: Dict, date: dt.date):
+    def save_rating_info(self, rating_info: Dict, date: dt.date) -> None:
         dirname = "rating_info"
         date_str = date.strftime("%Y%m%d")  # like 20200101
         filename = f"{date_str}.json"
@@ -119,13 +122,13 @@ class IOHandlerBase(object):
 class S3IOHandler(IOHandlerBase):
     temp_dir = Path("temp")
 
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__()
         self.s3 = boto3.client("s3")
         self.temp_dir.mkdir(exist_ok=True)
 
     @retry(wait=wait_exponential(multiplier=1, min=1, max=10))
-    def save_dict(self, dict_obj: Union[Dict, List], relative_path: str):
+    def save_dict(self, dict_obj: Union[Dict, List], relative_path: str) -> None:
         temp_path = self.temp_dir / f"{uuid.uuid4()}.json"
         with temp_path.open("w") as f:
             json.dump(dict_obj, f, indent=4, ensure_ascii=False)
@@ -135,7 +138,7 @@ class S3IOHandler(IOHandlerBase):
         return
 
     @retry(wait=wait_exponential(multiplier=1, min=1, max=10))
-    def load_dict(self, relative_path: str):
+    def load_dict(self, relative_path: str) -> Dict[str, Any]:
         temp_path = self.temp_dir / f"{uuid.uuid4()}.json"
         with temp_path.open("wb") as f:
             try:
@@ -147,11 +150,11 @@ class S3IOHandler(IOHandlerBase):
         temp_path.unlink(missing_ok=True)
         return dict_obj
 
-    def delete(self, relative_path: str):
+    def delete(self, relative_path: str) -> None:
         raise NotImplementedError
 
     @retry(wait=wait_exponential(multiplier=1, min=1, max=10))
-    def list_path(self, relative_path: str):
+    def list_path(self, relative_path: str) -> List[Any]:
         """バケットルートからの相対パスのリストを返す"""
         # use paginator since list_object only returns maximum 1000 objects
         paginator = self.s3.get_paginator("list_objects")
@@ -170,23 +173,23 @@ class LocalIOHandler(IOHandlerBase):
         self.base_path = base_path
         self.base_path.mkdir(exist_ok=True)
 
-    def save_dict(self, dict_obj: Union[Dict, List], relative_path: str):
+    def save_dict(self, dict_obj: Union[Dict, List], relative_path: str) -> None:
         file_path = self.base_path / relative_path
         file_path.parent.mkdir(parents=True, exist_ok=True)
         with file_path.open("w") as f:
             json.dump(dict_obj, f, indent=4, ensure_ascii=False)
         return
 
-    def load_dict(self, relative_path: str):
+    def load_dict(self, relative_path: str) -> Dict[str, Any]:
         file_path = self.base_path / relative_path
         with file_path.open() as f:
             dict_obj = json.load(f)
         return dict_obj
 
-    def delete(self, relative_path: str):
+    def delete(self, relative_path: str) -> None:
         pass
 
-    def list_path(self, relative_path: str):
+    def list_path(self, relative_path: str) -> List[Any]:
         """base path からの相対パスのリストを返す"""
         dir_path = self.base_path / relative_path
         obj_list = [str(p.relative_to(self.base_path)) for p in dir_path.iterdir()]

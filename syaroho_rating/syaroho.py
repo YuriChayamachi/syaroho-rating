@@ -1,4 +1,3 @@
-from os import EX_USAGE
 from typing import Dict, List, Tuple
 
 import pandas as pd
@@ -6,23 +5,23 @@ import pendulum
 from tweepy.errors import Forbidden
 
 from syaroho_rating.io_handler import IOHandlerBase
+from syaroho_rating.model import Tweet, User
 from syaroho_rating.rating import calc_rating_for_date, summarize_rating_info
 from syaroho_rating.twitter import Twitter, is_valid_client
-from syaroho_rating.utils import clean_html_tag, timedelta_to_ms, tweetid_to_datetime
+from syaroho_rating.utils import (clean_html_tag, timedelta_to_ms,
+                                  tweetid_to_datetime)
 from syaroho_rating.visualize.graph import GraphMaker
 from syaroho_rating.visualize.table import TableMaker
 
 
-def filter_and_sort(statuses: List, date: pendulum.date) -> List[Dict]:
+def filter_and_sort(statuses: List[Tweet], date: pendulum.date) -> List[Dict]:
     # 参加者リストの作成
     participants = []
     for s in statuses:
-        if not (
-            (s["text"] == "しゃろほー") and is_valid_client(clean_html_tag(s["source"]))
-        ):
+        if not ((s.text == "しゃろほー") and is_valid_client(clean_html_tag(s.source))):
             continue
 
-        rawtime = tweetid_to_datetime(s["id"])
+        rawtime = tweetid_to_datetime(s.id)
         time = rawtime.strftime("%S.%f")[:-3]
 
         record = timedelta_to_ms(rawtime - date)
@@ -30,7 +29,7 @@ def filter_and_sort(statuses: List, date: pendulum.date) -> List[Dict]:
         score = bouns - abs(record)
         participants.append(
             {
-                "screen_name": ("" + s["user"]["screen_name"]),
+                "screen_name": ("" + s.author.username),
                 "time": time,
                 "score": score,
             }
@@ -49,33 +48,33 @@ class Syaroho(object):
         self.twitter = twitter_api
         self.io = io_handler
 
-    def _fetch_and_save_result(self, date) -> List:
-        result = self.twitter.fetch_result(date)
+    def _fetch_and_save_result(self, date) -> List[Tweet]:
+        statuses, raw_response = self.twitter.fetch_result(date)
 
-        self.io.save_statuses(result, date)
-        return result
+        self.io.save_statuses(raw_response, date)
+        return statuses
 
-    def _fetch_and_save_result_dq(self, date) -> List:
-        result = self.twitter.fetch_result_dq()
+    def _fetch_and_save_result_dq(self, date) -> List[Tweet]:
+        statuses, raw_response = self.twitter.fetch_result_dq()
 
-        self.io.save_statuses_dq(result, date)
-        return result
+        self.io.save_statuses_dq(raw_response, date)
+        return statuses
 
-    def _fetch_and_save_member(self) -> List:
-        result = self.twitter.fetch_member()
+    def _fetch_and_save_member(self) -> List[User]:
+        users, raw_rasponse = self.twitter.fetch_member()
 
-        self.io.save_members(result)
-        return result
+        self.io.save_members(raw_rasponse)
+        return users
 
-    def _add_new_member(self, statuses: List, users: List):
-        existing_user_names = [u["screen_name"] for u in users]
+    def _add_new_member(self, statuses: List[Tweet], users: List[User]):
+        existing_user_names = [u.username for u in users]
 
         competitor_names = [
-            s["user"]["screen_name"]
+            s.author.username
             for s in statuses
-            if s["text"] == "しゃろほー"
+            if s.text == "しゃろほー"
             # s["source"] is like "<a href="url_to_client">client_name</a>"
-            and is_valid_client(clean_html_tag(s["source"]))
+            and is_valid_client(clean_html_tag(s.source))
         ]
 
         new_members = set(competitor_names) - set(existing_user_names)
@@ -107,7 +106,7 @@ class Syaroho(object):
     def run(
         self,
         date: pendulum.date,
-        dq_statuses: List,
+        dq_statuses: List[Tweet],
         fetch_tweet: bool = True,
         do_post: bool = False,
         do_retweet: bool = False,
@@ -237,8 +236,8 @@ class Syaroho(object):
         print("done.")
 
     def fetch_and_save_tweet(self, date, save: bool = False):
-        result = self.twitter.fetch_result(date)
-        print(result)
+        _, raw_response = self.twitter.fetch_result(date)
+        print(raw_response)
         if save:
-            self.io.save_statuses(result, date)
+            self.io.save_statuses(raw_response, date)
         return

@@ -50,8 +50,9 @@ def run():
 
         # observe
         print(">>>>> observe")
-        summary_df, rating_infos = syaroho.run(today, dq_statuses, fetch_tweet=True, 
-                                            do_post=DO_POST, do_retweet=DO_RETWEET)
+        summary_df, rating_infos = syaroho.run(
+            today, dq_statuses, fetch_tweet=True, do_post=DO_POST, do_retweet=DO_RETWEET
+        )
 
         # reply to mentions(10分間実行)
         print(">>>>> reply")
@@ -59,6 +60,7 @@ def run():
         slack.notify_success(title=f"{today_str} しゃろほー観測完了", text="")
     except:
         import traceback
+
         trace = traceback.format_exc()
         slack.notify_failed(title=f"{today_str} しゃろほーでエラー発生", text=trace)
         raise
@@ -73,8 +75,9 @@ def run():
 @click.option("--fetch-tweet", is_flag=True, type=bool)
 @click.option("--post", is_flag=True, type=bool)
 @click.option("--retweet", is_flag=True, type=bool)
-def backfill(start: str, end: str, eg_start: bool, fetch_tweet: bool,
-             post: bool, retweet: bool):
+def backfill(
+    start: str, end: str, eg_start: bool, fetch_tweet: bool, post: bool, retweet: bool
+):
     start_date = pendulum.parse(start, tz=TZ)
     end_date = pendulum.parse(end, tz=TZ)
 
@@ -108,6 +111,7 @@ def test_reply():
     rating_infos = io_handler.get_rating_info(today)
 
     from syaroho_rating.rating import summarize_rating_info
+
     summary_df = summarize_rating_info(rating_infos)
     print(summary_df)
 
@@ -115,7 +119,6 @@ def test_reply():
     print(">>>>> reply")
     syaroho.reply_to_mentions(summary_df, rating_infos)
     return
-
 
 
 if __name__ == "__main__":

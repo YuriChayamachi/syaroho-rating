@@ -1,6 +1,6 @@
 import datetime as dt
 import time
-from typing import Dict, List
+from typing import Any, Dict, List, Tuple
 
 import pandas as pd
 import pendulum
@@ -9,17 +9,11 @@ from tenacity import retry, wait_exponential
 from tweepy import Cursor, Stream
 from tweepy.models import Status
 
-from syaroho_rating.consts import (
-    ACCESS_TOKEN_KEY,
-    ACCESS_TOKEN_SECRET,
-    ACCOUNT_NAME,
-    CONSUMER_KEY,
-    CONSUMER_SECRET,
-    ENVIRONMENT_NAME,
-    LIST_SLUG,
-    invalid_clients,
-    reply_patience,
-)
+from syaroho_rating.consts import (ACCESS_TOKEN_KEY, ACCESS_TOKEN_SECRET,
+                                   ACCOUNT_NAME, BEARER_TOKEN, CONSUMER_KEY,
+                                   CONSUMER_SECRET, ENVIRONMENT_NAME,
+                                   LIST_SLUG, invalid_clients, reply_patience)
+from syaroho_rating.model import Tweet, User
 from syaroho_rating.utils import classes, tweetid_to_datetime
 from syaroho_rating.visualize.graph import GraphMaker
 
@@ -45,11 +39,11 @@ class Twitter(object):
         self.__api = tweepy.API(auth)
 
     @retry(wait=wait_exponential(multiplier=1, min=1, max=60))
-    def fetch_result(self, date) -> List:
+    def fetch_result(self, date) -> Tuple[List[Tweet], List[Dict[str, Any]]]:
         target_date = pendulum.instance(date, "Asia/Tokyo")
         from_date = target_date.subtract(minutes=1)
         to_date = target_date.add(minutes=1)
-        result = [
+        raw_response = [
             x._json
             for x in Cursor(
                 self.__api.search_30_day,
@@ -59,11 +53,12 @@ class Twitter(object):
                 toDate=to_date.in_tz("utc").strftime("%Y%m%d%H%M"),
             ).items(500)
         ]
-        return result
+        tweets = Tweet.from_responses_v1(raw_response)
+        return tweets, raw_response
 
     @retry(wait=wait_exponential(multiplier=1, min=1, max=60))
-    def fetch_result_dq(self) -> List:
-        result = [
+    def fetch_result_dq(self) -> Tuple[List[Tweet], List[Dict[str, Any]]]:
+        raw_response = [
             x._json
             for x in Cursor(
                 self.__api.list_timeline,
@@ -72,11 +67,12 @@ class Twitter(object):
                 include_rts=False,
             ).items(1000)
         ]
-        return result
+        tweets = Tweet.from_responses_v1(raw_response)
+        return tweets, raw_response
 
     @retry(wait=wait_exponential(multiplier=1, min=1, max=60))
-    def fetch_member(self) -> List:
-        result = [
+    def fetch_member(self) -> Tuple[List[User], List[Dict[str, Any]]]:
+        raw_response = [
             x._json
             for x in Cursor(
                 self.__api.get_list_members,
@@ -84,7 +80,8 @@ class Twitter(object):
                 slug=LIST_SLUG,
             ).items(1000)
         ]
-        return result
+        users = User.from_responses_v1(raw_response)
+        return users, raw_response
 
     @retry(wait=wait_exponential(multiplier=1, min=1, max=60))
     def add_members_to_list(self, screen_names: List[str]):

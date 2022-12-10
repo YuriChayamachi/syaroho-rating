@@ -302,6 +302,12 @@ USER_FIELDS = [
 
 class TwitterV2:
     def __init__(self):
+        # api v1.1 (v2 でサポートされていない機能用)
+        auth = tweepy.OAuthHandler(consumer_key, consumer_secret)
+        auth.set_access_token(access_token_key, access_token_secret)
+        self.__api = tweepy.API(auth)
+
+        # api v2
         self.client = tweepy.Client(
             consumer_key=CONSUMER_KEY,
             consumer_secret=CONSUMER_SECRET,
@@ -446,10 +452,22 @@ class TwitterV2:
         return users, all_info_dict
 
     def add_members_to_list(self, users: List[User]):
-        raise NotImplementedError
+        for u in users:
+            self.client.add_list_member(
+                id="",
+                user_id=u.id,
+            )
 
-    def post_with_multiple_media(self, message: str, media_list: List[str], **kwargs):
-        raise NotImplementedError
+    def post_with_multiple_media(
+        self, message: str, media_list: List[str], **kwargs: Any
+    ) -> None:
+        media_ids = []
+        for media in media_list:
+            res = self.__api.media_upload(media)
+            media_ids.append(res.media_id)
+
+        self.__api.update_status(status=message, media_ids=media_ids, **kwargs)
+        return
 
     def listen_and_reply(self, rating_infos, summary_df):
         raise NotImplementedError

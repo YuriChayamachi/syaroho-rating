@@ -10,7 +10,10 @@ from syaroho_rating.utils import clean_html_tag, tweetid_to_datetime
 @dataclass(frozen=True)
 class User:
     id: str
+    name: str
+    """the name defined in user profile"""
     username: str
+    """the name followed after @"""
     protected: bool
 
     @staticmethod
@@ -18,6 +21,7 @@ class User:
         return [
             User(
                 id=u["id"],
+                name=u["name"],
                 username=u["screen_name"],
                 protected=u["protected"],
             )
@@ -27,7 +31,8 @@ class User:
     @staticmethod
     def from_responses_v2(users: Iterable[tweepy.User]) -> List["User"]:
         return [
-            User(id=u.id, username=u.username, protected=u.protected) for u in users
+            User(id=u.id, name=u.name, username=u.username, protected=u.protected)
+            for u in users
         ]
 
 
@@ -50,6 +55,7 @@ class Tweet:
                 id=t["id"],
                 author=User(
                     id=t["user"]["id"],
+                    name=t["user"]["name"],
                     username=t["user"]["screen_name"],
                     protected=t["user"]["protected"],
                 ),
@@ -61,7 +67,7 @@ class Tweet:
     def from_responses_v2(
         tweets: Iterable[tweepy.Tweet], users: Iterable[tweepy.User]
     ) -> List["Tweet"]:
-        users_dict = {u.id: User(u.id, u.username, u.protected) for u in users}
+        users_dict = {u.id: User(u.id, u.name, u.username, u.protected) for u in users}
         return [
             Tweet(
                 text=t.text,

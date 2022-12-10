@@ -2,6 +2,8 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Dict, Iterable, List
 
+import tweepy
+
 from syaroho_rating.utils import clean_html_tag, tweetid_to_datetime
 
 
@@ -20,6 +22,12 @@ class User:
                 protected=u["protected"],
             )
             for u in raw_response
+        ]
+
+    @staticmethod
+    def from_responses_v2(users: Iterable[tweepy.User]) -> List["User"]:
+        return [
+            User(id=u.id, username=u.username, protected=u.protected) for u in users
         ]
 
 
@@ -47,4 +55,20 @@ class Tweet:
                 ),
             )
             for t in raw_response
+        ]
+
+    @staticmethod
+    def from_responses_v2(
+        tweets: Iterable[tweepy.Tweet], users: Iterable[tweepy.User]
+    ) -> List["Tweet"]:
+        users_dict = {u.id: User(u.id, u.username, u.protected) for u in users}
+        return [
+            Tweet(
+                text=t.text,
+                source=t.source,
+                created_at_ms=tweetid_to_datetime(t.id),
+                id=t.id,
+                author=users_dict[t.author_id],
+            )
+            for t in tweets
         ]

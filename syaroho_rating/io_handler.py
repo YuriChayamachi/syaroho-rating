@@ -6,7 +6,7 @@ from typing import Any, Dict, List, Union
 
 import boto3
 from botocore.exceptions import ClientError
-from tenacity import retry, wait_exponential
+from tenacity import retry, stop_after_attempt, wait_exponential
 
 from syaroho_rating.consts import S3_BUCKET_NAME, STORAGE
 from syaroho_rating.model import Tweet
@@ -31,7 +31,7 @@ class IOHandlerBase(object):
     def save_dict(self, dict_obj: Union[Dict, List], relative_path: str) -> None:
         raise NotImplementedError
 
-    def load_dict(self, relative_path: str) -> Dict[str, Any]:
+    def load_dict(self, relative_path: str) -> Any:
         raise NotImplementedError
 
     def delete(self, relative_path: str) -> None:
@@ -88,7 +88,7 @@ class IOHandlerBase(object):
         self.save_dict(statuses, f"{dirname}/{filename}")
         return
 
-    def get_members(self) -> List[Dict[str, Any]]:
+    def get_members_v1(self) -> List[Dict[str, Any]]:
         dirname = "member"
         filename = "member.json"
         members_dict = self.load_dict(f"{dirname}/{filename}")
@@ -127,7 +127,9 @@ class S3IOHandler(IOHandlerBase):
         self.s3 = boto3.client("s3")
         self.temp_dir.mkdir(exist_ok=True)
 
-    @retry(wait=wait_exponential(multiplier=1, min=1, max=10))
+    @retry(
+        wait=wait_exponential(multiplier=1, min=1, max=10), stop=stop_after_attempt(5)
+    )
     def save_dict(self, dict_obj: Union[Dict, List], relative_path: str) -> None:
         temp_path = self.temp_dir / f"{uuid.uuid4()}.json"
         with temp_path.open("w") as f:
@@ -137,8 +139,10 @@ class S3IOHandler(IOHandlerBase):
         temp_path.unlink(missing_ok=True)
         return
 
-    @retry(wait=wait_exponential(multiplier=1, min=1, max=10))
-    def load_dict(self, relative_path: str) -> Dict[str, Any]:
+    @retry(
+        wait=wait_exponential(multiplier=1, min=1, max=10), stop=stop_after_attempt(5)
+    )
+    def load_dict(self, relative_path: str) -> Any:
         temp_path = self.temp_dir / f"{uuid.uuid4()}.json"
         with temp_path.open("wb") as f:
             try:
@@ -153,7 +157,9 @@ class S3IOHandler(IOHandlerBase):
     def delete(self, relative_path: str) -> None:
         raise NotImplementedError
 
-    @retry(wait=wait_exponential(multiplier=1, min=1, max=10))
+    @retry(
+        wait=wait_exponential(multiplier=1, min=1, max=10), stop=stop_after_attempt(5)
+    )
     def list_path(self, relative_path: str) -> List[Any]:
         """バケットルートからの相対パスのリストを返す"""
         # use paginator since list_object only returns maximum 1000 objects
@@ -180,7 +186,7 @@ class LocalIOHandler(IOHandlerBase):
             json.dump(dict_obj, f, indent=4, ensure_ascii=False)
         return
 
-    def load_dict(self, relative_path: str) -> Dict[str, Any]:
+    def load_dict(self, relative_path: str) -> Any:
         file_path = self.base_path / relative_path
         with file_path.open() as f:
             dict_obj = json.load(f)

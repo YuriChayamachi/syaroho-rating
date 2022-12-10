@@ -10,7 +10,7 @@ RUN pip install -U pip \
     && pip install -r requirements.txt \
     && rm -rf ~/.cache/pip
 
-COPY . /app
+COPY main.py syaroho_rating /app
 
 # force the stdout and stderr streams to be unbuffered
 ENV PYTHONUNBUFFERED=1

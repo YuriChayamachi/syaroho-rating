@@ -1,11 +1,11 @@
 import datetime as dt
 import time
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import pandas as pd
 import pendulum
 import tweepy
-from tenacity import retry, wait_exponential
+from tenacity import retry, stop_after_attempt, wait_exponential
 from tweepy import Cursor, Stream
 from tweepy.models import Status
 
@@ -38,7 +38,9 @@ class Twitter(object):
         auth.set_access_token(access_token_key, access_token_secret)
         self.__api = tweepy.API(auth)
 
-    @retry(wait=wait_exponential(multiplier=1, min=1, max=60))
+    @retry(
+        wait=wait_exponential(multiplier=1, min=1, max=60), stop=stop_after_attempt(5)
+    )
     def fetch_result(
         self, date: pendulum.DateTime
     ) -> Tuple[List[Tweet], List[Dict[str, Any]]]:
@@ -58,7 +60,9 @@ class Twitter(object):
         tweets = Tweet.from_responses_v1(raw_response)
         return tweets, raw_response
 
-    @retry(wait=wait_exponential(multiplier=1, min=1, max=60))
+    @retry(
+        wait=wait_exponential(multiplier=1, min=1, max=60), stop=stop_after_attempt(5)
+    )
     def fetch_result_dq(self) -> Tuple[List[Tweet], List[Dict[str, Any]]]:
         raw_response = [
             x._json
@@ -72,7 +76,9 @@ class Twitter(object):
         tweets = Tweet.from_responses_v1(raw_response)
         return tweets, raw_response
 
-    @retry(wait=wait_exponential(multiplier=1, min=1, max=60))
+    @retry(
+        wait=wait_exponential(multiplier=1, min=1, max=60), stop=stop_after_attempt(5)
+    )
     def fetch_member(self) -> Tuple[List[User], List[Dict[str, Any]]]:
         raw_response = [
             x._json
@@ -85,14 +91,19 @@ class Twitter(object):
         users = User.from_responses_v1(raw_response)
         return users, raw_response
 
-    @retry(wait=wait_exponential(multiplier=1, min=1, max=60))
-    def add_members_to_list(self, screen_names: List[str]) -> None:
+    @retry(
+        wait=wait_exponential(multiplier=1, min=1, max=60), stop=stop_after_attempt(5)
+    )
+    def add_members_to_list(self, users: List[User]) -> None:
+        screen_names = [u.username for u in users]
         self.__api.add_list_members(
             screen_name=screen_names, slug=LIST_SLUG, owner_screen_name=ACCOUNT_NAME
         )
         return
 
-    @retry(wait=wait_exponential(multiplier=1, min=1, max=60))
+    @retry(
+        wait=wait_exponential(multiplier=1, min=1, max=60), stop=stop_after_attempt(5)
+    )
     def post_with_multiple_media(
         self, message: str, media_list: List[str], **kwargs: Any
     ) -> None:
@@ -116,12 +127,16 @@ class Twitter(object):
         stream.disconnect()
         return
 
-    @retry(wait=wait_exponential(multiplier=1, min=1, max=60))
+    @retry(
+        wait=wait_exponential(multiplier=1, min=1, max=60), stop=stop_after_attempt(5)
+    )
     def retweet(self, tweet_id: str) -> None:
         self.__api.retweet(tweet_id)
         return
 
-    @retry(wait=wait_exponential(multiplier=1, min=1, max=60))
+    @retry(
+        wait=wait_exponential(multiplier=1, min=1, max=60), stop=stop_after_attempt(5)
+    )
     def update_status(self, message: str) -> None:
         self.__api.update_status(message)
         return
@@ -207,9 +222,283 @@ class Listener(Stream):
             return
 
 
-if __name__ == "__main__":
-    # test(API を消費してしまうので単体テストは個別で行う)
+EXPANSIONS = [
+    "attachments.poll_ids",
+    "attachments.media_keys",
+    "author_id",
+    "edit_history_tweet_ids",
+    "entities.mentions.username",
+    "geo.place_id",
+    "in_reply_to_user_id",
+    "referenced_tweets.id",
+    "referenced_tweets.id.author_id",
+]
+MEDIA_FIELDS = [
+    "duration_ms",
+    "height",
+    "media_key",
+    "preview_image_url",
+    "type",
+    "url",
+    "width",
+    "public_metrics",
+    # "non_public_metrics",
+    # "organic_metrics",
+    # "promoted_metrics",
+    "alt_text",
+    "variants",
+]
+PLACE_FIELDS = [
+    "contained_within",
+    "country",
+    "country_code",
+    "full_name",
+    "geo",
+    "id",
+    "name",
+    "place_type",
+]
+POLL_FIELDS = ["duration_minutes", "end_datetime", "id", "options", "voting_status"]
+TWEET_FIELDS = [
+    "attachments",
+    "author_id",
+    "context_annotations",
+    "conversation_id",
+    "created_at",
+    "edit_controls",
+    "entities",
+    "geo",
+    "id",
+    "in_reply_to_user_id",
+    "lang",
+    # "non_public_metrics",
+    "public_metrics",
+    # "organic_metrics",
+    # "promoted_metrics",
+    "possibly_sensitive",
+    "referenced_tweets",
+    "reply_settings",
+    "source",
+    "text",
+    "withheld",
+]
+USER_FIELDS = [
+    "created_at",
+    "description",
+    "entities",
+    "id",
+    "location",
+    "name",
+    "pinned_tweet_id",
+    "profile_image_url",
+    "protected",
+    "public_metrics",
+    "url",
+    "username",
+    "verified",
+    "withheld",
+]
 
-    twitter = Twitter()
-    res = twitter.fetch_result(pendulum.today("Asia/Tokyo"))
-    print(res)
+
+class TwitterV2:
+    def __init__(self):
+        self.client = tweepy.Client(
+            consumer_key=CONSUMER_KEY,
+            consumer_secret=CONSUMER_SECRET,
+            access_token=ACCESS_TOKEN_KEY,
+            access_token_secret=ACCESS_TOKEN_SECRET,
+        )
+
+    def update_status(self, message: str):
+        response = self.client.create_tweet(text=message)
+        return response
+
+    def retweet(self, tweet_id: str):
+        response = self.client.retweet(tweet_id)
+        return response
+
+    def fetch_tweets(
+        self,
+        query: str,
+        start_time: Optional[pendulum.DateTime] = None,
+        end_time: Optional[pendulum.DateTime] = None,
+    ) -> Tuple[List[Tweet], Dict[str, Any]]:
+        data: List[tweepy.Tweet] = []
+        medias: List[tweepy.Media] = []
+        places: List[tweepy.Place] = []
+        polls: List[tweepy.Poll] = []
+        tweets: List[tweepy.Tweet] = []
+        users: List[tweepy.User] = []
+
+        for response in tweepy.Paginator(
+            self.client.search_recent_tweets,
+            query=query,
+            user_auth=True,
+            max_results=500,  # system limit
+            expansions=EXPANSIONS,
+            media_fields=MEDIA_FIELDS,
+            place_fields=PLACE_FIELDS,
+            poll_fields=POLL_FIELDS,
+            tweet_fields=TWEET_FIELDS,
+            user_fields=USER_FIELDS,
+            start_time=start_time,
+            end_time=end_time,
+        ):
+            data += response.data
+            medias += response.includes.get("medias", [])
+            places += response.includes.get("places", [])
+            polls += response.includes.get("polls", [])
+            tweets += response.includes.get("tweets", [])
+            users += response.includes.get("users", [])
+
+        tweet_objects = Tweet.from_responses_v2(tweets=data, users=users)
+        all_info_dict = self.resp_to_dict(data, medias, places, polls, tweets, users)
+        return tweet_objects, all_info_dict
+
+    def resp_to_dict(
+        self, data, medias, places, polls, tweets, users
+    ) -> Dict[str, Any]:
+        # それぞれ data attribute に全情報の dict が入っている
+        info_dict = {
+            "data": [tweet.data for tweet in data],
+            "includes": {},
+        }
+        if medias is not None:
+            info_dict["includes"]["medias"] = [media.data for media in medias]
+        if places is not None:
+            info_dict["includes"]["places"] = [place.data for place in places]
+        if polls is not None:
+            info_dict["includes"]["polls"] = [poll.data for poll in polls]
+        if tweets is not None:
+            info_dict["includes"]["tweets"] = [tweet.data for tweet in tweets]
+        if users is not None:
+            info_dict["includes"]["users"] = [user.data for user in users]
+        return info_dict
+
+    def fetch_result(self, date) -> Tuple[List[Tweet], Dict[str, Any]]:
+        target_date = pendulum.instance(date, "Asia/Tokyo")
+        start_time = target_date.subtract(minutes=1)
+        end_time = target_date.add(minutes=1)
+        tweets, all_info_dict = self.fetch_tweets(
+            query="しゃろほー -is:retweet",
+            start_time=start_time,
+            end_time=end_time,
+        )
+        return tweets, all_info_dict
+
+    def fetch_list_tweets(self, list_id: str) -> Tuple[List[Tweet], Dict[str, Any]]:
+        data: List[tweepy.Tweet] = []
+        medias: List[tweepy.Media] = []
+        places: List[tweepy.Place] = []
+        polls: List[tweepy.Poll] = []
+        tweets: List[tweepy.Tweet] = []
+        users: List[tweepy.User] = []
+
+        for response in tweepy.Paginator(
+            self.client.get_list_tweets,
+            id=list_id,
+            user_auth=True,
+            max_results=100,  # system limit
+            expansions=EXPANSIONS,
+            media_fields=MEDIA_FIELDS,
+            place_fields=PLACE_FIELDS,
+            poll_fields=POLL_FIELDS,
+            tweet_fields=TWEET_FIELDS,
+            user_fields=USER_FIELDS,
+        ):
+            data += response.data
+            medias += response.includes.get("medias", [])
+            places += response.includes.get("places", [])
+            polls += response.includes.get("polls", [])
+            tweets += response.includes.get("tweets", [])
+            users += response.includes.get("users", [])
+
+        tweet_objects = Tweet.from_responses_v2(tweets=data, users=users)
+        all_info_dict = self.resp_to_dict(data, medias, places, polls, tweets, users)
+        return tweet_objects, all_info_dict
+
+    def fetch_result_dq(self, date) -> Tuple[List[Tweet], Dict[str, Any]]:
+        tweets, all_info_dict = self.fetch_list_tweets(list_id="")
+        return tweets, all_info_dict
+
+    def fetch_list_member(self, list_id: str):
+        data: List[tweepy.User] = []
+        tweets: List[tweepy.Tweet] = []
+        for response in tweepy.Paginator(
+            self.client.get_list_members,
+            id=list_id,
+            user_auth=True,
+            max_results=100,  # system limit
+            expansions=["pinned_tweet_id"],
+            tweet_fields=TWEET_FIELDS,
+            user_fields=USER_FIELDS,
+        ):
+            data += response.data
+            tweets += response.includes.get("tweets", [])
+        users = User.from_responses_v2(users=data)
+        all_info_dict = self.resp_to_dict(
+            data=data, medias=None, places=None, polls=None, tweets=tweets, users=None
+        )
+        return users, all_info_dict
+
+    def fetch_member(self):
+        users, all_info_dict = self.fetch_list_member(list_id="")
+        return users, all_info_dict
+
+    def add_members_to_list(self, users: List[User]):
+        raise NotImplementedError
+
+    def post_with_multiple_media(self, message: str, media_list: List[str], **kwargs):
+        raise NotImplementedError
+
+    def listen_and_reply(self, rating_infos, summary_df):
+        raise NotImplementedError
+
+    def listen(self, query: str):
+        streaming_client = MyStreaming(BEARER_TOKEN)
+        streaming_client.add_rules(tweepy.StreamRule(query))
+        streaming_client.filter(
+            expansions=EXPANSIONS,
+            media_fields=MEDIA_FIELDS,
+            place_fields=PLACE_FIELDS,
+            poll_fields=POLL_FIELDS,
+            tweet_fields=TWEET_FIELDS,
+            user_fields=USER_FIELDS,
+            threaded=True,
+        )
+        import time
+
+        while True:
+            time.sleep(10)
+            print(
+                f"Len of tweets: {len(streaming_client.tweets)}, len of users: {len(streaming_client.users)}"
+            )
+
+
+class MyStreaming(tweepy.StreamingClient):
+    def __init__(self, *args, **kwargs):
+        super(MyStreaming, self).__init__(*args, **kwargs)
+        self.tweets = []
+        self.users = []
+
+    # def on_data(self, raw_data):
+    #     super(MyStreaming, self).on_data(raw_data)
+    #     print(f"[on_data] {raw_data}")
+
+    # def on_tweet(self, tweet):
+    #     print(f"[on_tweet] {tweet}")
+
+    # def on_includes(self, includes):
+    #     print(f"[on_includes] {includes}")
+
+    # def on_matching_rules(self, matching_rules):
+    #     print(f"[on_matching_rules] {matching_rules}")
+
+    def on_response(self, response):
+        print(f"[on_response] {response}")
+        tweet = response.data
+        users = response.includes["users"]
+        print(tweet)
+        print(users)
+        self.tweets.append(tweet)
+        self.users.append(users)

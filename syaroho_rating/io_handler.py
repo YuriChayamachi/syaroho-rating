@@ -60,7 +60,7 @@ class IOHandlerBase(object):
         tweets = Tweet.from_responses_v1(results)
         return tweets
 
-    def save_statuses(self, statuses: List, date: dt.date) -> None:
+    def save_statuses_v1(self, statuses: List, date: dt.date) -> None:
         dirname = "statuses"
         date_str = date.strftime("%Y%m%d")  # like 20200101
 
@@ -69,6 +69,34 @@ class IOHandlerBase(object):
 
         filename = f"{date_str}_1.json"
         self.save_dict(statuses_dict, f"{dirname}/{filename}")
+        return
+
+    def get_statuses_v2(self, date: dt.date) -> List[Tweet]:
+        dirname = "statuses_v2"
+        date_str = date.strftime("%Y%m%d")  # like 20200101
+
+        # 同じ日付のファイルが複数ある場合は統合する
+        file_list = self.list_path(dirname)
+        target_files = [
+            f_path for f_path in file_list if f"{dirname}/{date_str}" in f_path
+        ]
+        data = []
+        users = []
+        for f_path in target_files:
+            statuses_dict = self.load_dict(f_path)
+            data += statuses_dict["data"]
+            users += statuses_dict["includes"].get("users", [])
+        tweets = Tweet.from_responses_v2(data, users)
+        return tweets
+
+    def save_statuses_v2(self, all_info_dict: Dict, date: dt.date) -> None:
+        dirname = "statuses_v2"
+        date_str = date.strftime("%Y%m%d")  # like 20200101
+
+        # TODO: convert datetime to string
+
+        filename = f"{date_str}_1.json"
+        self.save_dict(all_info_dict, f"{dirname}/{filename}")
         return
 
     def get_statuses_dq_v1(self, date: dt.date) -> List[Tweet]:
@@ -80,12 +108,33 @@ class IOHandlerBase(object):
         tweets = Tweet.from_responses_v1(raw_statuses)
         return tweets
 
-    def save_statuses_dq(self, statuses: List, date: dt.date) -> None:
+    def save_statuses_dq_v1(self, statuses: List, date: dt.date) -> None:
         dirname = "statuses_dq"
         date_str = date.strftime("%Y%m%d")  # like 20200101
 
         filename = f"{date_str}.json"
         self.save_dict(statuses, f"{dirname}/{filename}")
+        return
+
+    def get_statuses_dq_v2(self, date: dt.date) -> List[Tweet]:
+        dirname = "statuses_dq_v2"
+        date_str = date.strftime("%Y%m%d")  # like 20200101
+
+        filename = f"{date_str}.json"
+        statuses_dict = self.load_dict(f"{dirname}/{filename}")
+        data = statuses_dict["data"]
+        users = statuses_dict["includes"].get("users", [])
+        tweets = Tweet.from_responses_v2(data, users)
+        return tweets
+
+    def save_statuses_dq_v2(self, all_info_dict: Dict, date: dt.date) -> None:
+        dirname = "statuses_dq_v2"
+        date_str = date.strftime("%Y%m%d")  # like 20200101
+
+        # TODO: convert datetime to string
+
+        filename = f"{date_str}.json"
+        self.save_dict(all_info_dict, f"{dirname}/{filename}")
         return
 
     def get_members_v1(self) -> List[Dict[str, Any]]:
@@ -94,7 +143,7 @@ class IOHandlerBase(object):
         members_dict = self.load_dict(f"{dirname}/{filename}")
         return members_dict["users"]
 
-    def save_members(self, members: List) -> None:
+    def save_members_v1(self, members: List) -> None:
         dirname = "member"
         filename = "member.json"
 

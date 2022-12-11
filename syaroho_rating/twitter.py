@@ -248,7 +248,7 @@ MEDIA_FIELDS = [
     "url",
     "width",
     "public_metrics",
-    # "non_public_metrics",
+    # "non_public_metrics",  # these are private attributes
     # "organic_metrics",
     # "promoted_metrics",
     "alt_text",
@@ -372,9 +372,7 @@ class TwitterV2:
         return tweet_objects, all_info_dict
 
     @staticmethod
-    def resp_to_dict(
-        data, medias, places, polls, tweets, users
-    ) -> Dict[str, Any]:
+    def resp_to_dict(data, medias, places, polls, tweets, users) -> Dict[str, Any]:
         # それぞれ data attribute に全情報の dict が入っている
         info_dict = {
             "data": [tweet.data for tweet in data],
@@ -479,7 +477,7 @@ class TwitterV2:
 
         self.apiv1.update_status(status=message, media_ids=media_ids, **kwargs)
         return
-    
+
     def close_stream(self, client: tweepy.StreamingClient) -> None:
         rules = client.get_rules()
         client.delete_rules(rules)
@@ -523,7 +521,6 @@ class TwitterV2:
             threaded=True,
         )
         return client
-
 
 
 class ReplyStreaming(tweepy.StreamingClient):
@@ -580,3 +577,13 @@ class SyarohoStreaming(tweepy.StreamingClient):
         self.polls += response.includes.get("polls", [])
         self.tweets += response.includes.get("tweets", [])
         self.users += response.includes.get("users", [])
+
+    def get_data_dict(self) -> Dict[str, Any]:
+        return TwitterV2.resp_to_dict(
+            data=self.data,
+            medias=self.medias,
+            places=self.places,
+            polls=self.polls,
+            tweets=self.tweets,
+            users=self.users,
+        )

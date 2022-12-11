@@ -371,8 +371,9 @@ class TwitterV2:
         all_info_dict = self.resp_to_dict(data, medias, places, polls, tweets, users)
         return tweet_objects, all_info_dict
 
+    @staticmethod
     def resp_to_dict(
-        self, data, medias, places, polls, tweets, users
+        data, medias, places, polls, tweets, users
     ) -> Dict[str, Any]:
         # それぞれ data attribute に全情報の dict が入っている
         info_dict = {
@@ -478,6 +479,11 @@ class TwitterV2:
 
         self.apiv1.update_status(status=message, media_ids=media_ids, **kwargs)
         return
+    
+    def close_stream(self, client: tweepy.StreamingClient) -> None:
+        rules = client.get_rules()
+        client.delete_rules(rules)
+        client.disconnect()
 
     def listen_and_reply(self, rating_infos, summary_df):
         client = ReplyStreaming(
@@ -486,8 +492,7 @@ class TwitterV2:
             twitter=self,
         )
         query = ""
-        response = client.add_rules(tweepy.StreamRule(query))
-        rule: tweepy.StreamRule = response.data  # ID is assigned
+        client.add_rules(tweepy.StreamRule(query))
 
         client.filter(
             expansions=EXPANSIONS,
@@ -501,8 +506,24 @@ class TwitterV2:
 
         # 10分後にストリーミングを終了
         time.sleep(dt.timedelta(minutes=10).total_seconds())
-        client.delete_rules(rule)
-        client.disconnect()
+        self.close_stream(client)
+
+    def listen_to_syaroho(self) -> tweepy.StreamingClient:
+        client = SyarohoStreaming()
+        query = ""
+        client.add_rules(tweepy.StreamRule(query))
+
+        client.filter(
+            expansions=EXPANSIONS,
+            media_fields=MEDIA_FIELDS,
+            place_fields=PLACE_FIELDS,
+            poll_fields=POLL_FIELDS,
+            tweet_fields=TWEET_FIELDS,
+            user_fields=USER_FIELDS,
+            threaded=True,
+        )
+        return client
+
 
 
 class ReplyStreaming(tweepy.StreamingClient):
@@ -535,27 +556,27 @@ class ReplyStreaming(tweepy.StreamingClient):
 class SyarohoStreaming(tweepy.StreamingClient):
     def __init__(self, *args, **kwargs):
         super(SyarohoStreaming, self).__init__(*args, **kwargs)
+        # for syaroho
+        self.tweets = []
+
+        # for saving information
+        self.data = []
+        self.medias = []
+        self.places = []
+        self.polls = []
         self.tweets = []
         self.users = []
-
-    # def on_data(self, raw_data):
-    #     super(MyStreaming, self).on_data(raw_data)
-    #     print(f"[on_data] {raw_data}")
-
-    # def on_tweet(self, tweet):
-    #     print(f"[on_tweet] {tweet}")
-
-    # def on_includes(self, includes):
-    #     print(f"[on_includes] {includes}")
-
-    # def on_matching_rules(self, matching_rules):
-    #     print(f"[on_matching_rules] {matching_rules}")
 
     def on_response(self, response):
         print(f"[on_response] {response}")
         tweet = response.data
         users = response.includes["users"]
-        print(tweet)
-        print(users)
-        self.tweets.append(tweet)
-        self.users.append(users)
+        tweets = Tweet.from_responses_v2(tweets=[tweet], users=users)
+        self.tweets += tweets
+
+        self.data.append(response.data)
+        self.medias += response.includes.get("medias", [])
+        self.places += response.includes.get("places", [])
+        self.polls += response.includes.get("polls", [])
+        self.tweets += response.includes.get("tweets", [])
+        self.users += response.includes.get("users", [])

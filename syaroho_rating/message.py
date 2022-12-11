@@ -1,5 +1,8 @@
+from syaroho_rating.utils import classes
+
+
 def create_reply_message(
-    name,
+    name_r,
     name_jp,
     best_time,
     highest,

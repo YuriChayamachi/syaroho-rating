@@ -5,7 +5,6 @@ from typing import Any, Dict, List, Optional, Tuple
 import pandas as pd
 import pendulum
 import tweepy
-from syaroho_ratint.message import create_reply_message
 from tenacity import retry, stop_after_attempt, wait_exponential
 from tweepy import Cursor, Stream
 from tweepy.models import Status
@@ -14,8 +13,9 @@ from syaroho_rating.consts import (ACCESS_TOKEN_KEY, ACCESS_TOKEN_SECRET,
                                    ACCOUNT_NAME, BEARER_TOKEN, CONSUMER_KEY,
                                    CONSUMER_SECRET, ENVIRONMENT_NAME,
                                    LIST_SLUG, invalid_clients, reply_patience)
+from syaroho_rating.message import create_reply_message
 from syaroho_rating.model import Tweet, User
-from syaroho_rating.utils import classes, tweetid_to_datetime
+from syaroho_rating.utils import tweetid_to_datetime
 from syaroho_rating.visualize.graph import GraphMaker
 
 
@@ -31,10 +31,6 @@ class Twitter(object):
         access_token_key: str = ACCESS_TOKEN_KEY,
         access_token_secret: str = ACCESS_TOKEN_SECRET,
     ) -> None:
-        self.__consumer_key = consumer_key
-        self.__consumer_secret = consumer_secret
-        self.__access_token_key = access_token_key
-        self.__access_token_secret = access_token_secret
         auth = tweepy.OAuthHandler(consumer_key, consumer_secret)
         auth.set_access_token(access_token_key, access_token_secret)
         self.__api = tweepy.API(auth)
@@ -143,6 +139,66 @@ class Twitter(object):
         return
 
 
+def handle_reply(
+    tweet: Tweet,
+    replied_list: List[str],
+    rating_info,
+    rating_summary,
+    twitter: Twitter,
+) -> None:
+    name_jp = tweet.author.name
+    name = tweet.author.user_name
+    tweet_id = str(tweet.id)
+    text = tweet.text
+    reply_time = tweetid_to_datetime(tweet_id)  # type: pendulum.DateTime
+    delta_second = (pendulum.now("Asia/Tokyo") - reply_time).total_seconds()
+
+    already_replied = name in replied_list
+    is_text_valid = (
+        (text.find("ランク") > -1)
+        or (text.find("らんく") > -1)
+        or (text.lower().find("rank") > -1)
+    )
+    if (
+        already_replied
+        or (delta_second >= reply_patience)
+        or (name == ACCOUNT_NAME)
+        or not is_text_valid
+    ):
+        print(f"skip replying to {name}: {text}")
+        return
+
+    # 機械的に生成されるグラフファイル名を取得
+    fname = GraphMaker.get_savepath(name)
+
+    # グラフは参加者のものだけ生成しているので、ファイルの有無で当日の参加者か判別
+    # 参加者でない場合はスキップ
+    name_r = name.replace("@", "＠")
+    if not fname.exists():
+        print(f"@{name_r} didn't participate today. skip.")
+        replied_list.append(name)
+        return
+
+    print("Sending a reply to @" + name)
+    result = rating_info[name]
+    message = create_reply_message(
+        name_r=name_r,
+        name_jp=name_jp,
+        best_time=result["best_time"],
+        highest=result["highest"],
+        rating=result["rate"],
+        rank_all=len(rating_summary.index),
+        rank=rating_summary["Rank"][name],
+        match=rating_summary["Match"][name],
+        win=rating_summary["Win"][name],
+    )
+    twitter.post_with_multiple_media(
+        message, media_list=[str(fname)], in_reply_to_status_id=tweet_id
+    )
+    replied_list.append(name)
+    return
+
+
 class Listener(Stream):
     def __init__(
         self,
@@ -162,65 +218,14 @@ class Listener(Stream):
         self.replied_list: List[str] = []
 
     def on_status(self, status: Status) -> None:
-        name_jp = status.author.name
-        name = status.author.screen_name
-        tweet_id = str(status.id)
-        text = status.text
-        reply_time = tweetid_to_datetime(status.id)  # type: pendulum.DateTime
-        delta_second = (pendulum.now("Asia/Tokyo") - reply_time).total_seconds()
-
-        if (
-            (name in self.replied_list)
-            or (status.favorited is True)
-            or (delta_second >= reply_patience)
-            or (name == ACCOUNT_NAME)
-        ):
-            print(f"skip replying to {name}: {text}")
-            return
-
-        if (
-            (text.find("ランク") > -1)
-            or (text.find("らんく") > -1)
-            or (text.lower().find("rank") > -1)
-        ):
-            # 機械的に生成されるグラフファイル名を取得
-            fname = GraphMaker.get_savepath(name)
-
-            # グラフは参加者のものだけ生成しているので、ファイルの有無で当日の参加者か判別
-            # 参加者でない場合はスキップ
-            name_r = name.replace("@", "＠")
-            if not fname.exists():
-                print(f"@{name_r} didn't participate today. skip.")
-                self.replied_list.append(name)
-                return
-
-            print("Sending a reply to @" + name)
-
-            result = self.rating_info[name]
-            best_time = result["best_time"]
-            highest = result["highest"]
-            rating = result["rate"]
-            rank_all = len(self.rating_summary.index)
-            rank = self.rating_summary["Rank"][name]
-            match = self.rating_summary["Match"][name]
-            win = self.rating_summary["Win"][name]
-
-            s0 = "@" + name_r + "\n"
-            s1 = name_jp + " (しゃろほー" + classes(highest) + ")\n"
-            s2 = "レーティング: " + str(rating) + " (最高: " + str(highest) + ")" + "\n"
-            s3 = "順位: " + str(rank) + " / " + str(rank_all) + "\n"
-            s4 = "優勝 / 参加回数: " + str(win) + " / " + str(match) + "\n"
-            s5 = "ベスト記録: " + str(best_time)
-            s_all = s0 + s1 + s2 + s3 + s4 + s5
-
-            self.twitter.post_with_multiple_media(
-                s_all, media_list=[str(fname)], in_reply_to_status_id=tweet_id
-            )
-            self.replied_list.append(name)
-            return
-        else:
-            print(f"skip replying to {name}: {text}")
-            return
+        tweet = Tweet.from_responses_v1([status._json])
+        handle_reply(
+            tweet=tweet,
+            replied_list=self.replied_list,
+            rating_info=self.rating_info,
+            rating_summary=self.rating_summary,
+            twitter=self.twitter,
+        )
 
 
 EXPANSIONS = [
@@ -428,7 +433,7 @@ class TwitterV2:
         all_info_dict = self.resp_to_dict(data, medias, places, polls, tweets, users)
         return tweet_objects, all_info_dict
 
-    def fetch_result_dq(self, date) -> Tuple[List[Tweet], Dict[str, Any]]:
+    def fetch_result_dq(self) -> Tuple[List[Tweet], Dict[str, Any]]:
         tweets, all_info_dict = self.fetch_list_tweets(list_id="")
         return tweets, all_info_dict
 
@@ -471,16 +476,20 @@ class TwitterV2:
             res = self.apiv1.media_upload(media)
             media_ids.append(res.media_id)
 
-        self.__api.update_status(status=message, media_ids=media_ids, **kwargs)
+        self.apiv1.update_status(status=message, media_ids=media_ids, **kwargs)
         return
 
     def listen_and_reply(self, rating_infos, summary_df):
-        raise NotImplementedError
+        client = ReplyStreaming(
+            rating_info=rating_infos,
+            rating_summary=summary_df,
+            twitter=self,
+        )
+        query = ""
+        response = client.add_rules(tweepy.StreamRule(query))
+        rule: tweepy.StreamRule = response.data  # ID is assigned
 
-    def listen(self, query: str):
-        streaming_client = MyStreaming(BEARER_TOKEN)
-        streaming_client.add_rules(tweepy.StreamRule(query))
-        streaming_client.filter(
+        client.filter(
             expansions=EXPANSIONS,
             media_fields=MEDIA_FIELDS,
             place_fields=PLACE_FIELDS,
@@ -489,13 +498,11 @@ class TwitterV2:
             user_fields=USER_FIELDS,
             threaded=True,
         )
-        import time
 
-        while True:
-            time.sleep(10)
-            print(
-                f"Len of tweets: {len(streaming_client.tweets)}, len of users: {len(streaming_client.users)}"
-            )
+        # 10分後にストリーミングを終了
+        time.sleep(dt.timedelta(minutes=10).total_seconds())
+        client.delete_rules(rule)
+        client.disconnect()
 
 
 class ReplyStreaming(tweepy.StreamingClient):
@@ -505,7 +512,7 @@ class ReplyStreaming(tweepy.StreamingClient):
         rating_summary: pd.DataFrame,
         twitter: Twitter,
     ):
-        super(MyStreaming, self).__init__(BEARER_TOKEN)
+        super(ReplyStreaming, self).__init__(BEARER_TOKEN)
         self.rating_info = rating_info
         self.rating_summary = rating_summary.reset_index().set_index("User")
         self.twitter = twitter
@@ -514,64 +521,20 @@ class ReplyStreaming(tweepy.StreamingClient):
     def on_response(self, response: tweepy.Response) -> None:
         data = response.data
         users = response.includes["users"]
-        tweet = Tweet.from_response_v2(tweets=[data], users=users)
+        tweet = Tweet.from_responses_v2(tweets=[data], users=users)
 
-        name_jp = tweet.author.name
-        name = tweet.author.user_name
-        tweet_id = str(tweet.id)
-        text = tweet.text
-        reply_time = tweetid_to_datetime(tweet_id)  # type: pendulum.DateTime
-        delta_second = (pendulum.now("Asia/Tokyo") - reply_time).total_seconds()
-
-        already_replied = name in self.replied_list
-        is_text_valid = (
-            (text.find("ランク") > -1)
-            or (text.find("らんく") > -1)
-            or (text.lower().find("rank") > -1)
+        handle_reply(
+            tweet=tweet,
+            replied_list=self.replied_list,
+            rating_info=self.rating_info,
+            rating_summary=self.rating_summary,
+            twitter=self.twitter,
         )
-        if (
-            already_replied
-            or (delta_second >= reply_patience)
-            or (name == ACCOUNT_NAME)
-            or not is_text_valid
-        ):
-            print(f"skip replying to {name}: {text}")
-            return
-
-        # 機械的に生成されるグラフファイル名を取得
-        fname = GraphMaker.get_savepath(name)
-
-        # グラフは参加者のものだけ生成しているので、ファイルの有無で当日の参加者か判別
-        # 参加者でない場合はスキップ
-        name_r = name.replace("@", "＠")
-        if not fname.exists():
-            print(f"@{name_r} didn't participate today. skip.")
-            self.replied_list.append(name)
-            return
-
-        print("Sending a reply to @" + name)
-        message = create_reply_message(
-            name=name,
-            name_jp=name_jp,
-            result=self.rating_info[name],
-            best_time=result["best_time"],
-            highest=result["highest"],
-            rating=result["rate"],
-            rank_all=len(self.rating_summary.index),
-            rank=self.rating_summary["Rank"][name],
-            match=self.rating_summary["Match"][name],
-            win=self.rating_summary["Win"][name],
-        )
-        self.twitter.post_with_multiple_media(
-            message, media_list=[str(fname)], in_reply_to_status_id=tweet_id
-        )
-        self.replied_list.append(name)
-        return
 
 
-class MyStreaming(tweepy.StreamingClient):
+class SyarohoStreaming(tweepy.StreamingClient):
     def __init__(self, *args, **kwargs):
-        super(MyStreaming, self).__init__(*args, **kwargs)
+        super(SyarohoStreaming, self).__init__(*args, **kwargs)
         self.tweets = []
         self.users = []
 

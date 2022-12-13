@@ -7,7 +7,7 @@ from tweepy.errors import Forbidden
 from syaroho_rating.io_handler import IOHandlerBase
 from syaroho_rating.model import Tweet, User
 from syaroho_rating.rating import calc_rating_for_date, summarize_rating_info
-from syaroho_rating.twitter import Twitter, is_valid_client
+from syaroho_rating.twitter import Twitter, TwitterV2, is_valid_client
 from syaroho_rating.utils import (clean_html_tag, timedelta_to_ms,
                                   tweetid_to_datetime)
 from syaroho_rating.visualize.graph import GraphMaker
@@ -44,26 +44,26 @@ def filter_and_sort(statuses: List[Tweet], date: pendulum.DateTime) -> List[Dict
 
 
 class Syaroho(object):
-    def __init__(self, twitter_api: Twitter, io_handler: IOHandlerBase):
-        self.twitter = twitter_api
+    def __init__(self, twitter: TwitterV2, io_handler: IOHandlerBase):
+        self.twitter = twitter
         self.io = io_handler
 
     def _fetch_and_save_result(self, date: pendulum.DateTime) -> List[Tweet]:
         statuses, raw_response = self.twitter.fetch_result(date)
 
-        self.io.save_statuses(raw_response, date)
+        self.io.save_statuses_v2(raw_response, date)
         return statuses
 
     def _fetch_and_save_result_dq(self, date: pendulum.DateTime) -> List[Tweet]:
         statuses, raw_response = self.twitter.fetch_result_dq()
 
-        self.io.save_statuses_dq(raw_response, date)
+        self.io.save_statuses_dq_v2(raw_response, date)
         return statuses
 
     def _fetch_and_save_member(self) -> List[User]:
-        users, raw_rasponse = self.twitter.fetch_member()
+        users, raw_response = self.twitter.fetch_member()
 
-        self.io.save_members(raw_rasponse)
+        self.io.save_members_v2(raw_response)
         return users
 
     def _add_new_member(self, statuses: List[Tweet], users: List[User]) -> None:
@@ -74,10 +74,11 @@ class Syaroho(object):
             for s in statuses
             if s.text == "しゃろほー"
             # s["source"] is like "<a href="url_to_client">client_name</a>"
-            and is_valid_client(clean_html_tag(s.source))
+            and is_valid_client(s.source)
         ]
 
-        new_members = set(competitor_names) - set(existing_user_names)
+        new_member_names = set(competitor_names) - set(existing_user_names)
+        new_members = [u for u in users if u.username in new_member_names]
 
         if len(new_members):
             self.twitter.add_members_to_list(list(new_members))
@@ -175,12 +176,12 @@ class Syaroho(object):
             print("Creating result table...")
             tm = TableMaker(df_result, date)
             table_paths = tm.make()
-            table_paths = [str(p) for p in table_paths]
+            table_paths_str = [str(p) for p in table_paths]
             print("Done.")
 
             print("Posting today's result...")
             message = tm._make_header()
-            self.twitter.post_with_multiple_media(message, table_paths)
+            self.twitter.post_with_multiple_media(message, table_paths_str)
             print("Created table paths: ", table_paths)
             print("Done.")
 

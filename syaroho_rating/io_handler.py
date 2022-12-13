@@ -153,6 +153,19 @@ class IOHandlerBase(object):
         self.save_dict(members_dict, f"{dirname}/{filename}")
         return
 
+    def get_members_v2(self) -> Dict[str, Any]:
+        dirname = "member_v2"
+        filename = "member.json"
+        members_dict = self.load_dict(f"{dirname}/{filename}")
+        return members_dict
+
+    def save_members_v2(self, members: Dict[str, Any]) -> None:
+        dirname = "member_v2"
+        filename = "member.json"
+
+        self.save_dict(members, f"{dirname}/{filename}")
+        return
+
     def get_rating_info(self, date: dt.date) -> Dict[str, Any]:
         dirname = "rating_info"
         date_str = date.strftime("%Y%m%d")  # like 20200101
@@ -182,7 +195,7 @@ class S3IOHandler(IOHandlerBase):
     def save_dict(self, dict_obj: Union[Dict, List], relative_path: str) -> None:
         temp_path = self.temp_dir / f"{uuid.uuid4()}.json"
         with temp_path.open("w") as f:
-            json.dump(dict_obj, f, indent=4, ensure_ascii=False)
+            json.dump(dict_obj, f, indent=4, ensure_ascii=False, default=str)
         with temp_path.open("rb") as f:
             self.s3.upload_fileobj(f, S3_BUCKET_NAME, relative_path)
         temp_path.unlink(missing_ok=True)
@@ -232,7 +245,7 @@ class LocalIOHandler(IOHandlerBase):
         file_path = self.base_path / relative_path
         file_path.parent.mkdir(parents=True, exist_ok=True)
         with file_path.open("w") as f:
-            json.dump(dict_obj, f, indent=4, ensure_ascii=False)
+            json.dump(dict_obj, f, indent=4, ensure_ascii=False, default=str)
         return
 
     def load_dict(self, relative_path: str) -> Any:

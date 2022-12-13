@@ -13,6 +13,7 @@ ENVIRONMENT_NAME = os.environ["ENVIRONMENT_NAME"]
 LIST_SLUG = os.environ["LIST_SLUG"]
 ACCOUNT_NAME = os.environ["ACCOUNT_NAME"]
 BEARER_TOKEN = os.environ["TWITTER_BEARER_TOKEN"]
+SYAROHO_LIST_ID = os.environ["SYAROHO_LIST_ID"]
 
 # s3 configs
 S3_BUCKET_NAME = os.environ["S3_BUCKET_NAME"]

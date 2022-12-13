@@ -1,6 +1,6 @@
 import datetime as dt
 import time
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, Iterable, List, Optional, Tuple, Union
 
 import pandas as pd
 import pendulum
@@ -12,7 +12,8 @@ from tweepy.models import Status
 from syaroho_rating.consts import (ACCESS_TOKEN_KEY, ACCESS_TOKEN_SECRET,
                                    ACCOUNT_NAME, BEARER_TOKEN, CONSUMER_KEY,
                                    CONSUMER_SECRET, ENVIRONMENT_NAME,
-                                   LIST_SLUG, invalid_clients, reply_patience)
+                                   LIST_SLUG, SYAROHO_LIST_ID, invalid_clients,
+                                   reply_patience)
 from syaroho_rating.message import create_reply_message
 from syaroho_rating.model import Tweet, User
 from syaroho_rating.utils import tweetid_to_datetime
@@ -142,12 +143,12 @@ class Twitter(object):
 def handle_reply(
     tweet: Tweet,
     replied_list: List[str],
-    rating_info,
-    rating_summary,
+    rating_info: Dict[str, Any],
+    rating_summary: pd.DataFrame,
     twitter: Twitter,
 ) -> None:
     name_jp = tweet.author.name
-    name = tweet.author.user_name
+    name = tweet.author.username
     tweet_id = str(tweet.id)
     text = tweet.text
     reply_time = tweetid_to_datetime(tweet_id)  # type: pendulum.DateTime
@@ -219,8 +220,12 @@ class Listener(Stream):
 
     def on_status(self, status: Status) -> None:
         tweet = Tweet.from_responses_v1([status._json])
+
+        if not tweet:
+            return
+
         handle_reply(
-            tweet=tweet,
+            tweet=tweet[0],
             replied_list=self.replied_list,
             rating_info=self.rating_info,
             rating_summary=self.rating_summary,
@@ -307,7 +312,7 @@ USER_FIELDS = [
 
 
 class TwitterV2:
-    def __init__(self):
+    def __init__(self) -> None:
         # api v1.1 (v2 でサポートされていない機能用)
         auth = tweepy.OAuth1UserHandler(
             CONSUMER_KEY,
@@ -325,13 +330,13 @@ class TwitterV2:
             access_token_secret=ACCESS_TOKEN_SECRET,
         )
 
-    def update_status(self, message: str):
-        response = self.client.create_tweet(text=message)
-        return response
+    def update_status(self, message: str) -> None:
+        self.client.create_tweet(text=message)
+        return
 
-    def retweet(self, tweet_id: str):
-        response = self.client.retweet(tweet_id)
-        return response
+    def retweet(self, tweet_id: str) -> None:
+        self.client.retweet(tweet_id)
+        return
 
     def fetch_tweets(
         self,
@@ -350,7 +355,7 @@ class TwitterV2:
             self.client.search_recent_tweets,
             query=query,
             user_auth=True,
-            max_results=500,  # system limit
+            max_results=100,  # system limit
             expansions=EXPANSIONS,
             media_fields=MEDIA_FIELDS,
             place_fields=PLACE_FIELDS,
@@ -359,6 +364,7 @@ class TwitterV2:
             user_fields=USER_FIELDS,
             start_time=start_time,
             end_time=end_time,
+            limit=5,
         ):
             data += response.data
             medias += response.includes.get("medias", [])
@@ -372,7 +378,14 @@ class TwitterV2:
         return tweet_objects, all_info_dict
 
     @staticmethod
-    def resp_to_dict(data, medias, places, polls, tweets, users) -> Dict[str, Any]:
+    def resp_to_dict(
+        data: Union[Iterable[tweepy.Tweet], Iterable[tweepy.User]],
+        medias: Iterable[tweepy.Media],
+        places: Iterable[tweepy.Place],
+        polls: Iterable[tweepy.Poll],
+        tweets: Iterable[tweepy.Tweet],
+        users: Iterable[tweepy.User],
+    ) -> Dict[str, Any]:
         # それぞれ data attribute に全情報の dict が入っている
         info_dict = {
             "data": [tweet.data for tweet in data],
@@ -390,7 +403,9 @@ class TwitterV2:
             info_dict["includes"]["users"] = [user.data for user in users]
         return info_dict
 
-    def fetch_result(self, date) -> Tuple[List[Tweet], Dict[str, Any]]:
+    def fetch_result(
+        self, date: pendulum.DateTime
+    ) -> Tuple[List[Tweet], Dict[str, Any]]:
         target_date = pendulum.instance(date, "Asia/Tokyo")
         start_time = target_date.subtract(minutes=1)
         end_time = target_date.add(minutes=1)
@@ -420,6 +435,7 @@ class TwitterV2:
             poll_fields=POLL_FIELDS,
             tweet_fields=TWEET_FIELDS,
             user_fields=USER_FIELDS,
+            limit=5,
         ):
             data += response.data
             medias += response.includes.get("medias", [])
@@ -433,10 +449,10 @@ class TwitterV2:
         return tweet_objects, all_info_dict
 
     def fetch_result_dq(self) -> Tuple[List[Tweet], Dict[str, Any]]:
-        tweets, all_info_dict = self.fetch_list_tweets(list_id="")
+        tweets, all_info_dict = self.fetch_list_tweets(list_id=SYAROHO_LIST_ID)
         return tweets, all_info_dict
 
-    def fetch_list_member(self, list_id: str):
+    def fetch_list_member(self, list_id: str) -> Tuple[List[User], Dict[str, Any]]:
         data: List[tweepy.User] = []
         tweets: List[tweepy.Tweet] = []
         for response in tweepy.Paginator(
@@ -447,6 +463,7 @@ class TwitterV2:
             expansions=["pinned_tweet_id"],
             tweet_fields=TWEET_FIELDS,
             user_fields=USER_FIELDS,
+            limit=5,
         ):
             data += response.data
             tweets += response.includes.get("tweets", [])
@@ -456,14 +473,14 @@ class TwitterV2:
         )
         return users, all_info_dict
 
-    def fetch_member(self):
-        users, all_info_dict = self.fetch_list_member(list_id="")
+    def fetch_member(self) -> Tuple[List[User], Dict[str, Any]]:
+        users, all_info_dict = self.fetch_list_member(list_id=SYAROHO_LIST_ID)
         return users, all_info_dict
 
-    def add_members_to_list(self, users: List[User]):
+    def add_members_to_list(self, users: List[User]) -> None:
         for u in users:
             self.client.add_list_member(
-                id="",
+                id=SYAROHO_LIST_ID,
                 user_id=u.id,
             )
 
@@ -480,18 +497,19 @@ class TwitterV2:
 
     def close_stream(self, client: tweepy.StreamingClient) -> None:
         rules = client.get_rules()
-        client.delete_rules(rules)
+        client.delete_rules(rules.data)
         client.disconnect()
 
-    def listen_and_reply(self, rating_infos, summary_df):
+    def listen_and_reply(self, rating_infos: Dict[str, Any], summary_df: pd.DataFrame):
         client = ReplyStreaming(
             rating_info=rating_infos,
             rating_summary=summary_df,
             twitter=self,
         )
-        query = ""
-        client.add_rules(tweepy.StreamRule(query))
 
+        # リプとメンションを拾う
+        query = f"to:{ACCOUNT_NAME} OR @{ACCOUNT_NAME}"
+        client.add_rules(tweepy.StreamRule(query))
         client.filter(
             expansions=EXPANSIONS,
             media_fields=MEDIA_FIELDS,
@@ -528,7 +546,7 @@ class ReplyStreaming(tweepy.StreamingClient):
         self,
         rating_info: Dict[str, Any],
         rating_summary: pd.DataFrame,
-        twitter: Twitter,
+        twitter: TwitterV2,
     ):
         super(ReplyStreaming, self).__init__(BEARER_TOKEN)
         self.rating_info = rating_info
@@ -540,9 +558,13 @@ class ReplyStreaming(tweepy.StreamingClient):
         data = response.data
         users = response.includes["users"]
         tweet = Tweet.from_responses_v2(tweets=[data], users=users)
+        print(tweet)
+
+        if not tweet:
+            return
 
         handle_reply(
-            tweet=tweet,
+            tweet=tweet[0],
             replied_list=self.replied_list,
             rating_info=self.rating_info,
             rating_summary=self.rating_summary,
@@ -551,20 +573,20 @@ class ReplyStreaming(tweepy.StreamingClient):
 
 
 class SyarohoStreaming(tweepy.StreamingClient):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, **kwargs) -> None:
         super(SyarohoStreaming, self).__init__(*args, **kwargs)
         # for syaroho
-        self.tweets = []
+        self.tweets: List[Tweet] = []
 
         # for saving information
-        self.data = []
-        self.medias = []
-        self.places = []
-        self.polls = []
-        self.tweets = []
-        self.users = []
+        self.data: Union[List[tweepy.Tweet], List[tweepy.User]] = []
+        self.medias: List[tweepy.Media] = []
+        self.places: List[tweepy.Place] = []
+        self.polls: List[tweepy.Poll] = []
+        self.tweets: List[tweepy.Tweet] = []
+        self.users: List[tweepy.User] = []
 
-    def on_response(self, response):
+    def on_response(self, response: tweepy.Response) -> None:
         print(f"[on_response] {response}")
         tweet = response.data
         users = response.includes["users"]

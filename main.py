@@ -3,11 +3,11 @@ import time
 import click
 import pendulum
 
-from syaroho_rating.consts import DO_POST, DO_RETWEET, DEBUG
+from syaroho_rating.consts import DEBUG, DO_POST, DO_RETWEET
 from syaroho_rating.io_handler import get_io_handler
 from syaroho_rating.slack import SlackNotifier
 from syaroho_rating.syaroho import Syaroho
-from syaroho_rating.twitter import Twitter
+from syaroho_rating.twitter import Twitter, TwitterV2
 
 TZ = "Asia/Tokyo"
 
@@ -22,7 +22,7 @@ def run():
     """0時0分JSTに呼ばれる"""
     slack = SlackNotifier()
 
-    twitter = Twitter()
+    twitter = TwitterV2()
     io_handler = get_io_handler()
     syaroho = Syaroho(twitter, io_handler)
 
@@ -105,7 +105,7 @@ def fetch_tweet(date: str, save: bool):
 @cli.command(hidden=True)
 def test_reply():
     today = pendulum.today(TZ)
-    twitter = Twitter()
+    twitter = TwitterV2()
     io_handler = get_io_handler()
     syaroho = Syaroho(twitter, io_handler)
     rating_infos = io_handler.get_rating_info(today)

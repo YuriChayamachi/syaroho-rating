@@ -2,16 +2,16 @@ from syaroho_rating.utils import classes
 
 
 def create_reply_message(
-    name_r,
-    name_jp,
-    best_time,
-    highest,
-    rating,
-    rank_all,
-    rank,
-    match,
-    win,
-):
+    name_r: str,
+    name_jp: str,
+    best_time: str,
+    highest: int,
+    rating: int,
+    rank_all: int,
+    rank: int,
+    match: int,
+    win: int,
+) -> str:
     return "\n".join(
         [
             "@" + name_r,

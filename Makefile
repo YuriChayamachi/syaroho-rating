@@ -10,5 +10,9 @@ run:
 
 .PHONY: format
 format:
-	black syaroho_rating
-	isort syaroho_rating
+	black syaroho_rating main.py
+	isort syaroho_rating main.py
+
+.PHONY: test
+test:
+	docker compose run test black syaroho_rating

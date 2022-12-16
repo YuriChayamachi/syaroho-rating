@@ -15,4 +15,4 @@ format:
 
 .PHONY: test
 test:
-	docker compose run test black syaroho_rating
+	mypy syaroho_rating main.py

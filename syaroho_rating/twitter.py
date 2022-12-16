@@ -1,6 +1,6 @@
 import datetime as dt
 import time
-from typing import Any, Dict, Iterable, List, Optional, Tuple, Union
+from typing import Any, Dict, Iterable, List, Optional, Protocol, Tuple, Union
 
 import pandas as pd
 import pendulum
@@ -24,7 +24,40 @@ def is_valid_client(client: str) -> bool:
     return client not in invalid_clients
 
 
-class Twitter(object):
+RawInfo = Union[List[Dict[str, Any]], Dict[str, Any]]
+
+
+class Twitter(Protocol):
+    def fetch_result(self, date: pendulum.DateTime) -> Tuple[List[Tweet], RawInfo]:
+        ...
+
+    def fetch_result_dq(self) -> Tuple[List[Tweet], RawInfo]:
+        ...
+
+    def fetch_member(self) -> Tuple[List[User], RawInfo]:
+        ...
+
+    def add_members_to_list(self, users: List[User]) -> None:
+        ...
+
+    def post_with_multiple_media(
+        self, message: str, media_list: List[str], **kwargs: Any
+    ) -> None:
+        ...
+
+    def listen_and_reply(
+        self, rating_infos: Dict[str, Any], summary_df: pd.DataFrame
+    ) -> None:
+        ...
+
+    def update_status(self, message: str) -> None:
+        ...
+
+    def retweet(self, tweet_id: str) -> None:
+        ...
+
+
+class TwitterV1(Twitter):
     def __init__(
         self,
         consumer_key: str = CONSUMER_KEY,
@@ -205,7 +238,7 @@ class Listener(Stream):
         self,
         rating_info: Dict[str, Any],
         rating_summary: pd.DataFrame,
-        twitter: Twitter,
+        twitter: TwitterV1,
     ) -> None:
         super().__init__(
             consumer_key=CONSUMER_KEY,
@@ -311,7 +344,7 @@ USER_FIELDS = [
 ]
 
 
-class TwitterV2:
+class TwitterV2(Twitter):
     def __init__(self) -> None:
         # api v1.1 (v2 でサポートされていない機能用)
         auth = tweepy.OAuth1UserHandler(
@@ -500,7 +533,9 @@ class TwitterV2:
         client.delete_rules(rules.data)
         client.disconnect()
 
-    def listen_and_reply(self, rating_infos: Dict[str, Any], summary_df: pd.DataFrame):
+    def listen_and_reply(
+        self, rating_infos: Dict[str, Any], summary_df: pd.DataFrame
+    ) -> None:
         client = ReplyStreaming(
             rating_info=rating_infos,
             rating_summary=summary_df,
@@ -573,39 +608,39 @@ class ReplyStreaming(tweepy.StreamingClient):
 
 
 class SyarohoStreaming(tweepy.StreamingClient):
-    def __init__(self, *args, **kwargs) -> None:
-        super(SyarohoStreaming, self).__init__(*args, **kwargs)
+    def __init__(self) -> None:
+        super(SyarohoStreaming, self).__init__(BEARER_TOKEN)
         # for syaroho
         self.tweets: List[Tweet] = []
 
         # for saving information
-        self.data: Union[List[tweepy.Tweet], List[tweepy.User]] = []
-        self.medias: List[tweepy.Media] = []
-        self.places: List[tweepy.Place] = []
-        self.polls: List[tweepy.Poll] = []
-        self.tweets: List[tweepy.Tweet] = []
-        self.users: List[tweepy.User] = []
+        self.raw_data: List[tweepy.Tweet] = []
+        self.raw_medias: List[tweepy.Media] = []
+        self.raw_places: List[tweepy.Place] = []
+        self.raw_polls: List[tweepy.Poll] = []
+        self.raw_tweets: List[tweepy.Tweet] = []
+        self.raw_users: List[tweepy.User] = []
 
     def on_response(self, response: tweepy.Response) -> None:
         print(f"[on_response] {response}")
-        tweet = response.data
+        data = response.data
         users = response.includes["users"]
-        tweets = Tweet.from_responses_v2(tweets=[tweet], users=users)
+        tweets = Tweet.from_responses_v2(tweets=[data], users=users)
         self.tweets += tweets
 
-        self.data.append(response.data)
-        self.medias += response.includes.get("medias", [])
-        self.places += response.includes.get("places", [])
-        self.polls += response.includes.get("polls", [])
-        self.tweets += response.includes.get("tweets", [])
-        self.users += response.includes.get("users", [])
+        self.raw_data.append(response.data)
+        self.raw_medias += response.includes.get("medias", [])
+        self.raw_places += response.includes.get("places", [])
+        self.raw_polls += response.includes.get("polls", [])
+        self.raw_tweets += response.includes.get("tweets", [])
+        self.raw_users += response.includes.get("users", [])
 
     def get_data_dict(self) -> Dict[str, Any]:
         return TwitterV2.resp_to_dict(
-            data=self.data,
-            medias=self.medias,
-            places=self.places,
-            polls=self.polls,
-            tweets=self.tweets,
-            users=self.users,
+            data=self.raw_data,
+            medias=self.raw_medias,
+            places=self.raw_places,
+            polls=self.raw_polls,
+            tweets=self.raw_tweets,
+            users=self.raw_users,
         )

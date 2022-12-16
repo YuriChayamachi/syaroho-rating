@@ -2,7 +2,7 @@ import datetime as dt
 import json
 import uuid
 from pathlib import Path
-from typing import Any, Dict, List, Union
+from typing import Any, Dict, List, Protocol, Union
 
 import boto3
 from botocore.exceptions import ClientError
@@ -12,176 +12,41 @@ from syaroho_rating.consts import S3_BUCKET_NAME, STORAGE
 from syaroho_rating.model import Tweet
 
 
-def get_io_handler() -> "IOHandlerBase":
-
+def get_io_handler(version: int) -> "IOHandler":
+    base_handler: IOBaseHandler
     if STORAGE == "s3":
-        return S3IOHandler()
+        base_handler = S3IOBaseHandler()
     elif STORAGE == "local":
-        return LocalIOHandler()
+        base_handler = LocalIOBaseHandler()
     else:
         raise RuntimeError(f"Unexpected STORAGE variable: {STORAGE}")
 
+    if version == 1:
+        return IOHandlerV1(base_handler)
+    if version == 2:
+        return IOHandlerV2(base_handler)
+    else:
+        raise RuntimeError(f"Unexpected version: {version}")
 
-class IOHandlerBase(object):
 
-    ###################
-    # base operations #
-    ###################
+JsonObj = Union[List[Dict[str, Any]], Dict[str, Any]]
 
-    def save_dict(self, dict_obj: Union[Dict, List], relative_path: str) -> None:
-        raise NotImplementedError
+
+class IOBaseHandler(Protocol):
+    def save_dict(self, dict_obj: JsonObj, relative_path: str) -> None:
+        ...
 
     def load_dict(self, relative_path: str) -> Any:
-        raise NotImplementedError
-
-    def delete(self, relative_path: str) -> None:
-        raise NotImplementedError
+        ...
 
     def list_path(self, relative_path: str) -> List[Any]:
-        raise NotImplementedError
+        ...
 
-    #######################
-    # concrete operations #
-    #######################
-
-    def get_statuses_v1(self, date: dt.date) -> List[Tweet]:
-        dirname = "statuses"
-        date_str = date.strftime("%Y%m%d")  # like 20200101
-
-        # 同じ日付のファイルが複数ある場合は統合する
-        file_list = self.list_path(dirname)
-        target_files = [
-            f_path for f_path in file_list if f"{dirname}/{date_str}" in f_path
-        ]
-        results = []
-        for f_path in target_files:
-            statuses_dict = self.load_dict(f_path)
-            results += statuses_dict["results"]
-        tweets = Tweet.from_responses_v1(results)
-        return tweets
-
-    def save_statuses_v1(self, statuses: List, date: dt.date) -> None:
-        dirname = "statuses"
-        date_str = date.strftime("%Y%m%d")  # like 20200101
-
-        # 既存のファイルとの互換性のため "results" キーでラッピングする。
-        statuses_dict = {"results": statuses}
-
-        filename = f"{date_str}_1.json"
-        self.save_dict(statuses_dict, f"{dirname}/{filename}")
-        return
-
-    def get_statuses_v2(self, date: dt.date) -> List[Tweet]:
-        dirname = "statuses_v2"
-        date_str = date.strftime("%Y%m%d")  # like 20200101
-
-        # 同じ日付のファイルが複数ある場合は統合する
-        file_list = self.list_path(dirname)
-        target_files = [
-            f_path for f_path in file_list if f"{dirname}/{date_str}" in f_path
-        ]
-        data = []
-        users = []
-        for f_path in target_files:
-            statuses_dict = self.load_dict(f_path)
-            data += statuses_dict["data"]
-            users += statuses_dict["includes"].get("users", [])
-        tweets = Tweet.from_responses_v2(data, users)
-        return tweets
-
-    def save_statuses_v2(self, all_info_dict: Dict, date: dt.date) -> None:
-        dirname = "statuses_v2"
-        date_str = date.strftime("%Y%m%d")  # like 20200101
-
-        # TODO: convert datetime to string
-
-        filename = f"{date_str}_1.json"
-        self.save_dict(all_info_dict, f"{dirname}/{filename}")
-        return
-
-    def get_statuses_dq_v1(self, date: dt.date) -> List[Tweet]:
-        dirname = "statuses_dq"
-        date_str = date.strftime("%Y%m%d")  # like 20200101
-
-        filename = f"{date_str}.json"
-        raw_statuses = self.load_dict(f"{dirname}/{filename}")
-        tweets = Tweet.from_responses_v1(raw_statuses)
-        return tweets
-
-    def save_statuses_dq_v1(self, statuses: List, date: dt.date) -> None:
-        dirname = "statuses_dq"
-        date_str = date.strftime("%Y%m%d")  # like 20200101
-
-        filename = f"{date_str}.json"
-        self.save_dict(statuses, f"{dirname}/{filename}")
-        return
-
-    def get_statuses_dq_v2(self, date: dt.date) -> List[Tweet]:
-        dirname = "statuses_dq_v2"
-        date_str = date.strftime("%Y%m%d")  # like 20200101
-
-        filename = f"{date_str}.json"
-        statuses_dict = self.load_dict(f"{dirname}/{filename}")
-        data = statuses_dict["data"]
-        users = statuses_dict["includes"].get("users", [])
-        tweets = Tweet.from_responses_v2(data, users)
-        return tweets
-
-    def save_statuses_dq_v2(self, all_info_dict: Dict, date: dt.date) -> None:
-        dirname = "statuses_dq_v2"
-        date_str = date.strftime("%Y%m%d")  # like 20200101
-
-        # TODO: convert datetime to string
-
-        filename = f"{date_str}.json"
-        self.save_dict(all_info_dict, f"{dirname}/{filename}")
-        return
-
-    def get_members_v1(self) -> List[Dict[str, Any]]:
-        dirname = "member"
-        filename = "member.json"
-        members_dict = self.load_dict(f"{dirname}/{filename}")
-        return members_dict["users"]
-
-    def save_members_v1(self, members: List) -> None:
-        dirname = "member"
-        filename = "member.json"
-
-        # 既存のファイルとの互換性のため "users" キーでラッピングする。
-        members_dict = {"users": members}
-
-        self.save_dict(members_dict, f"{dirname}/{filename}")
-        return
-
-    def get_members_v2(self) -> Dict[str, Any]:
-        dirname = "member_v2"
-        filename = "member.json"
-        members_dict = self.load_dict(f"{dirname}/{filename}")
-        return members_dict
-
-    def save_members_v2(self, members: Dict[str, Any]) -> None:
-        dirname = "member_v2"
-        filename = "member.json"
-
-        self.save_dict(members, f"{dirname}/{filename}")
-        return
-
-    def get_rating_info(self, date: dt.date) -> Dict[str, Any]:
-        dirname = "rating_info"
-        date_str = date.strftime("%Y%m%d")  # like 20200101
-        filename = f"{date_str}.json"
-        rating_info = self.load_dict(f"{dirname}/{filename}")
-        return rating_info
-
-    def save_rating_info(self, rating_info: Dict, date: dt.date) -> None:
-        dirname = "rating_info"
-        date_str = date.strftime("%Y%m%d")  # like 20200101
-        filename = f"{date_str}.json"
-        self.save_dict(rating_info, f"{dirname}/{filename}")
-        return
+    def delete(self, relative_path: str) -> None:
+        ...
 
 
-class S3IOHandler(IOHandlerBase):
+class S3IOBaseHandler(IOBaseHandler):
     temp_dir = Path("temp")
 
     def __init__(self) -> None:
@@ -192,7 +57,7 @@ class S3IOHandler(IOHandlerBase):
     @retry(
         wait=wait_exponential(multiplier=1, min=1, max=10), stop=stop_after_attempt(5)
     )
-    def save_dict(self, dict_obj: Union[Dict, List], relative_path: str) -> None:
+    def save_dict(self, dict_obj: JsonObj, relative_path: str) -> None:
         temp_path = self.temp_dir / f"{uuid.uuid4()}.json"
         with temp_path.open("w") as f:
             json.dump(dict_obj, f, indent=4, ensure_ascii=False, default=str)
@@ -235,13 +100,13 @@ class S3IOHandler(IOHandlerBase):
         return obj_list
 
 
-class LocalIOHandler(IOHandlerBase):
+class LocalIOBaseHandler(IOBaseHandler):
     def __init__(self, base_path: Path = Path("data")):
         super().__init__()
         self.base_path = base_path
         self.base_path.mkdir(exist_ok=True)
 
-    def save_dict(self, dict_obj: Union[Dict, List], relative_path: str) -> None:
+    def save_dict(self, dict_obj: JsonObj, relative_path: str) -> None:
         file_path = self.base_path / relative_path
         file_path.parent.mkdir(parents=True, exist_ok=True)
         with file_path.open("w") as f:
@@ -262,3 +127,189 @@ class LocalIOHandler(IOHandlerBase):
         dir_path = self.base_path / relative_path
         obj_list = [str(p.relative_to(self.base_path)) for p in dir_path.iterdir()]
         return obj_list
+
+
+class IOHandler(Protocol):
+    def get_statuses(self, date: dt.date) -> List[Tweet]:
+        ...
+
+    def save_statuses(self, statuses: JsonObj, date: dt.date) -> None:
+        ...
+
+    def get_statuses_dq(self, date: dt.date) -> List[Tweet]:
+        ...
+
+    def save_statuses_dq(self, statuses: JsonObj, date: dt.date) -> None:
+        ...
+
+    def get_members(self) -> JsonObj:
+        ...
+
+    def save_members(self, members: JsonObj) -> None:
+        ...
+
+    def get_rating_info(self, date: dt.date) -> Dict[str, Any]:
+        ...
+
+    def save_rating_info(self, rating_info: Dict, date: dt.date) -> None:
+        ...
+
+
+class IOHandlerV1(object):
+    def __init__(self, base_handler: IOBaseHandler) -> None:
+        self.base_handler = base_handler
+
+    def get_statuses(self, date: dt.date) -> List[Tweet]:
+        dirname = "statuses"
+        date_str = date.strftime("%Y%m%d")  # like 20200101
+
+        # 同じ日付のファイルが複数ある場合は統合する
+        file_list = self.base_handler.list_path(dirname)
+        target_files = [
+            f_path for f_path in file_list if f"{dirname}/{date_str}" in f_path
+        ]
+        results = []
+        for f_path in target_files:
+            statuses_dict = self.base_handler.load_dict(f_path)
+            results += statuses_dict["results"]
+        tweets = Tweet.from_responses_v1(results)
+        return tweets
+
+    def save_statuses(self, statuses: JsonObj, date: dt.date) -> None:
+        dirname = "statuses"
+        date_str = date.strftime("%Y%m%d")  # like 20200101
+
+        # 既存のファイルとの互換性のため "results" キーでラッピングする。
+        statuses_dict = {"results": statuses}
+
+        filename = f"{date_str}_1.json"
+        self.base_handler.save_dict(statuses_dict, f"{dirname}/{filename}")
+        return
+
+    def get_statuses_dq(self, date: dt.date) -> List[Tweet]:
+        dirname = "statuses_dq"
+        date_str = date.strftime("%Y%m%d")  # like 20200101
+
+        filename = f"{date_str}.json"
+        raw_statuses = self.base_handler.load_dict(f"{dirname}/{filename}")
+        tweets = Tweet.from_responses_v1(raw_statuses)
+        return tweets
+
+    def save_statuses_dq(self, statuses: JsonObj, date: dt.date) -> None:
+        dirname = "statuses_dq"
+        date_str = date.strftime("%Y%m%d")  # like 20200101
+
+        filename = f"{date_str}.json"
+        self.base_handler.save_dict(statuses, f"{dirname}/{filename}")
+        return
+
+    def get_members(self) -> List[Dict[str, Any]]:
+        dirname = "member"
+        filename = "member.json"
+        members_dict = self.base_handler.load_dict(f"{dirname}/{filename}")
+        return members_dict["users"]
+
+    def save_members(self, members: JsonObj) -> None:
+        dirname = "member"
+        filename = "member.json"
+
+        # 既存のファイルとの互換性のため "users" キーでラッピングする。
+        members_dict = {"users": members}
+
+        self.base_handler.save_dict(members_dict, f"{dirname}/{filename}")
+        return
+
+    def get_rating_info(self, date: dt.date) -> Dict[str, Any]:
+        dirname = "rating_info"
+        date_str = date.strftime("%Y%m%d")  # like 20200101
+        filename = f"{date_str}.json"
+        rating_info = self.base_handler.load_dict(f"{dirname}/{filename}")
+        return rating_info
+
+    def save_rating_info(self, rating_info: Dict, date: dt.date) -> None:
+        dirname = "rating_info"
+        date_str = date.strftime("%Y%m%d")  # like 20200101
+        filename = f"{date_str}.json"
+        self.base_handler.save_dict(rating_info, f"{dirname}/{filename}")
+        return
+
+
+class IOHandlerV2(object):
+    def __init__(self, base_handler: IOBaseHandler) -> None:
+        self.base_handler = base_handler
+
+    def get_statuses(self, date: dt.date) -> List[Tweet]:
+        dirname = "statuses_v2"
+        date_str = date.strftime("%Y%m%d")  # like 20200101
+
+        # 同じ日付のファイルが複数ある場合は統合する
+        file_list = self.base_handler.list_path(dirname)
+        target_files = [
+            f_path for f_path in file_list if f"{dirname}/{date_str}" in f_path
+        ]
+        data = []
+        users = []
+        for f_path in target_files:
+            statuses_dict = self.base_handler.load_dict(f_path)
+            data += statuses_dict["data"]
+            users += statuses_dict["includes"].get("users", [])
+        tweets = Tweet.from_responses_v2(data, users)
+        return tweets
+
+    def save_statuses(self, all_info_dict: JsonObj, date: dt.date) -> None:
+        dirname = "statuses_v2"
+        date_str = date.strftime("%Y%m%d")  # like 20200101
+
+        # TODO: convert datetime to string
+
+        filename = f"{date_str}_1.json"
+        self.base_handler.save_dict(all_info_dict, f"{dirname}/{filename}")
+        return
+
+    def get_statuses_dq(self, date: dt.date) -> List[Tweet]:
+        dirname = "statuses_dq_v2"
+        date_str = date.strftime("%Y%m%d")  # like 20200101
+
+        filename = f"{date_str}.json"
+        statuses_dict = self.base_handler.load_dict(f"{dirname}/{filename}")
+        data = statuses_dict["data"]
+        users = statuses_dict["includes"].get("users", [])
+        tweets = Tweet.from_responses_v2(data, users)
+        return tweets
+
+    def save_statuses_dq(self, all_info_dict: JsonObj, date: dt.date) -> None:
+        dirname = "statuses_dq_v2"
+        date_str = date.strftime("%Y%m%d")  # like 20200101
+
+        # TODO: convert datetime to string
+
+        filename = f"{date_str}.json"
+        self.base_handler.save_dict(all_info_dict, f"{dirname}/{filename}")
+        return
+
+    def get_members(self) -> Dict[str, Any]:
+        dirname = "member_v2"
+        filename = "member.json"
+        members_dict = self.base_handler.load_dict(f"{dirname}/{filename}")
+        return members_dict
+
+    def save_members(self, members: JsonObj) -> None:
+        dirname = "member_v2"
+        filename = "member.json"
+
+        self.base_handler.save_dict(members, f"{dirname}/{filename}")
+        return
+
+    def get_rating_info(self, date: dt.date) -> Dict[str, Any]:
+        dirname = "rating_info"
+        date_str = date.strftime("%Y%m%d")  # like 20200101
+        filename = f"{date_str}.json"
+        rating_info = self.base_handler.load_dict(f"{dirname}/{filename}")
+        return rating_info
+
+    def save_rating_info(self, rating_info: Dict, date: dt.date) -> None:
+        dirname = "rating_info"
+        date_str = date.strftime("%Y%m%d")  # like 20200101
+        filename = f"{date_str}.json"
+        self.base_handler.save_dict(rating_info, f"{dirname}/{filename}")
+        return

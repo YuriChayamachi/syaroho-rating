@@ -352,6 +352,14 @@ USER_FIELDS = [
     "withheld",
 ]
 
+TweepyV2Obj = Union[
+    tweepy.Media,
+    tweepy.Place,
+    tweepy.Poll,
+    tweepy.Tweet,
+    tweepy.User,
+]
+
 
 class TwitterV2(Twitter):
     def __init__(self) -> None:
@@ -429,20 +437,21 @@ class TwitterV2(Twitter):
         users: Iterable[tweepy.User],
     ) -> Dict[str, Any]:
         # それぞれ data attribute に全情報の dict が入っている
+        includes: Dict[str, TweepyV2Obj] = {}
+        if medias is not None:
+            includes["medias"] = [media.data for media in medias]
+        if places is not None:
+            includes["places"] = [place.data for place in places]
+        if polls is not None:
+            includes["polls"] = [poll.data for poll in polls]
+        if tweets is not None:
+            includes["tweets"] = [tweet.data for tweet in tweets]
+        if users is not None:
+            includes["users"] = [user.data for user in users]
         info_dict = {
             "data": [tweet.data for tweet in data],
-            "includes": {},
+            "includes": includes,
         }
-        if medias is not None:
-            info_dict["includes"]["medias"] = [media.data for media in medias]
-        if places is not None:
-            info_dict["includes"]["places"] = [place.data for place in places]
-        if polls is not None:
-            info_dict["includes"]["polls"] = [poll.data for poll in polls]
-        if tweets is not None:
-            info_dict["includes"]["tweets"] = [tweet.data for tweet in tweets]
-        if users is not None:
-            info_dict["includes"]["users"] = [user.data for user in users]
         return info_dict
 
     def fetch_result(

@@ -5,7 +5,7 @@ from typing import Union
 import numpy as np
 import pendulum
 
-from syaroho_rating.consts import class_list, graph_colors, table_bg_colors
+from syaroho_rating.consts import TZ, class_list, graph_colors, table_bg_colors
 
 
 # 最高レーティングから段位を返す関数
@@ -57,3 +57,10 @@ def clean_html_tag(text: str) -> str:
     cleanr = re.compile("<.*?>")
     cleantext = re.sub(cleanr, "", text)
     return cleantext
+
+
+def parse_date_string(date_str: str) -> pendulum.DateTime:
+    parsed_date = pendulum.parse(date_str, tz=TZ)
+    if not isinstance(parsed_date, pendulum.DateTime):
+        raise RuntimeError(f"Failed parsing date string to DateTime: {date_str}")
+    return parsed_date

@@ -4,13 +4,12 @@ import click
 import pendulum
 
 from syaroho_rating.consts import (DEBUG, DO_POST, DO_RETWEET,
-                                   TWITTER_API_VERSION)
+                                   TWITTER_API_VERSION, TZ)
 from syaroho_rating.io_handler import get_io_handler
 from syaroho_rating.slack import SlackNotifier
 from syaroho_rating.syaroho import Syaroho
-from syaroho_rating.twitter import Twitter, get_twitter
-
-TZ = "Asia/Tokyo"
+from syaroho_rating.twitter import get_twitter
+from syaroho_rating.utils import parse_date_string
 
 
 @click.group()
@@ -79,8 +78,8 @@ def run() -> None:
 def backfill(
     start: str, end: str, eg_start: bool, fetch_tweet: bool, post: bool, retweet: bool
 ) -> None:
-    start_date = pendulum.parse(start, tz=TZ)
-    end_date = pendulum.parse(end, tz=TZ)
+    start_date = parse_date_string(start)
+    end_date = parse_date_string(end)
 
     twitter = get_twitter(TWITTER_API_VERSION)
     io_handler = get_io_handler(TWITTER_API_VERSION)
@@ -94,13 +93,13 @@ def backfill(
 @click.argument("date", type=str)
 @click.option("--save", is_flag=True, type=bool)
 def fetch_tweet(date: str, save: bool) -> None:
-    date = pendulum.parse(date, tz=TZ)
+    date_parsed = parse_date_string(date)
 
     twitter = get_twitter(TWITTER_API_VERSION)
     io_handler = get_io_handler(TWITTER_API_VERSION)
     syaroho = Syaroho(twitter, io_handler)
 
-    syaroho.fetch_and_save_tweet(date, save)
+    syaroho.fetch_and_save_tweet(date_parsed, save)
 
 
 @cli.command(hidden=True)

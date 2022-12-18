@@ -4,10 +4,10 @@ import pandas as pd
 import pendulum
 from tweepy.errors import Forbidden
 
-from syaroho_rating.io_handler import IOHandlerBase
+from syaroho_rating.io_handler import IOHandler
 from syaroho_rating.model import Tweet, User
 from syaroho_rating.rating import calc_rating_for_date, summarize_rating_info
-from syaroho_rating.twitter import Twitter, TwitterV2, is_valid_client
+from syaroho_rating.twitter import Twitter, is_valid_client
 from syaroho_rating.utils import (clean_html_tag, timedelta_to_ms,
                                   tweetid_to_datetime)
 from syaroho_rating.visualize.graph import GraphMaker
@@ -44,26 +44,26 @@ def filter_and_sort(statuses: List[Tweet], date: pendulum.DateTime) -> List[Dict
 
 
 class Syaroho(object):
-    def __init__(self, twitter: TwitterV2, io_handler: IOHandlerBase):
+    def __init__(self, twitter: Twitter, io_handler: IOHandler):
         self.twitter = twitter
         self.io = io_handler
 
     def _fetch_and_save_result(self, date: pendulum.DateTime) -> List[Tweet]:
         statuses, raw_response = self.twitter.fetch_result(date)
 
-        self.io.save_statuses_v2(raw_response, date)
+        self.io.save_statuses(raw_response, date)
         return statuses
 
     def _fetch_and_save_result_dq(self, date: pendulum.DateTime) -> List[Tweet]:
         statuses, raw_response = self.twitter.fetch_result_dq()
 
-        self.io.save_statuses_dq_v2(raw_response, date)
+        self.io.save_statuses_dq(raw_response, date)
         return statuses
 
     def _fetch_and_save_member(self) -> List[User]:
         users, raw_response = self.twitter.fetch_member()
 
-        self.io.save_members_v2(raw_response)
+        self.io.save_members(raw_response)
         return users
 
     def _add_new_member(self, statuses: List[Tweet], users: List[User]) -> None:
@@ -119,7 +119,7 @@ class Syaroho(object):
             print(f"Loaded {len(statuses)} tweets.")
         else:
             print(f"Loading tweets of date {date} from storage ...")
-            statuses = self.io.get_statuses_v1(date)
+            statuses = self.io.get_statuses(date)
             print(f"Loaded {len(statuses)} tweets.")
 
         # 前日のレーティング結果を読み込む
@@ -225,7 +225,7 @@ class Syaroho(object):
         for i, date in enumerate(pendulum.period(start_date, end_date).range("days")):
             print(f"Executing backfill for {date}...")
             try:
-                dq_statuses = self.io.get_statuses_dq_v1(date)
+                dq_statuses = self.io.get_statuses_dq(date)
             except FileNotFoundError:
                 print("no status_dq file found")
                 dq_statuses = []

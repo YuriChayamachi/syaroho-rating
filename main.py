@@ -3,27 +3,28 @@ import time
 import click
 import pendulum
 
-from syaroho_rating.consts import DEBUG, DO_POST, DO_RETWEET
+from syaroho_rating.consts import (DEBUG, DO_POST, DO_RETWEET,
+                                   TWITTER_API_VERSION)
 from syaroho_rating.io_handler import get_io_handler
 from syaroho_rating.slack import SlackNotifier
 from syaroho_rating.syaroho import Syaroho
-from syaroho_rating.twitter import Twitter, TwitterV2
+from syaroho_rating.twitter import Twitter, get_twitter
 
 TZ = "Asia/Tokyo"
 
 
 @click.group()
-def cli():
+def cli() -> None:
     pass
 
 
 @cli.command()
-def run():
+def run() -> None:
     """0時0分JSTに呼ばれる"""
     slack = SlackNotifier()
 
-    twitter = TwitterV2()
-    io_handler = get_io_handler()
+    twitter = get_twitter(TWITTER_API_VERSION)
+    io_handler = get_io_handler(TWITTER_API_VERSION)
     syaroho = Syaroho(twitter, io_handler)
 
     today = pendulum.today(TZ)
@@ -77,12 +78,12 @@ def run():
 @click.option("--retweet", is_flag=True, type=bool)
 def backfill(
     start: str, end: str, eg_start: bool, fetch_tweet: bool, post: bool, retweet: bool
-):
+) -> None:
     start_date = pendulum.parse(start, tz=TZ)
     end_date = pendulum.parse(end, tz=TZ)
 
-    twitter = Twitter()
-    io_handler = get_io_handler()
+    twitter = get_twitter(TWITTER_API_VERSION)
+    io_handler = get_io_handler(TWITTER_API_VERSION)
     syaroho = Syaroho(twitter, io_handler)
 
     syaroho.backfill(start_date, end_date, post, retweet, fetch_tweet, eg_start)
@@ -92,21 +93,21 @@ def backfill(
 @cli.command()
 @click.argument("date", type=str)
 @click.option("--save", is_flag=True, type=bool)
-def fetch_tweet(date: str, save: bool):
+def fetch_tweet(date: str, save: bool) -> None:
     date = pendulum.parse(date, tz=TZ)
 
-    twitter = Twitter()
-    io_handler = get_io_handler()
+    twitter = get_twitter(TWITTER_API_VERSION)
+    io_handler = get_io_handler(TWITTER_API_VERSION)
     syaroho = Syaroho(twitter, io_handler)
 
     syaroho.fetch_and_save_tweet(date, save)
 
 
 @cli.command(hidden=True)
-def test_reply():
+def test_reply() -> None:
     today = pendulum.today(TZ)
-    twitter = TwitterV2()
-    io_handler = get_io_handler()
+    twitter = get_twitter(TWITTER_API_VERSION)
+    io_handler = get_io_handler(TWITTER_API_VERSION)
     syaroho = Syaroho(twitter, io_handler)
     rating_infos = io_handler.get_rating_info(today)
 

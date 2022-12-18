@@ -20,6 +20,15 @@ from syaroho_rating.utils import tweetid_to_datetime
 from syaroho_rating.visualize.graph import GraphMaker
 
 
+def get_twitter(version: int) -> "Twitter":
+    if version == 1:
+        return TwitterV1()
+    elif version == 2:
+        return TwitterV2()
+    else:
+        raise ValueError(f"Unsupported version: {version}.")
+
+
 def is_valid_client(client: str) -> bool:
     return client not in invalid_clients
 

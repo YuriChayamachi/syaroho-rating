@@ -23,6 +23,7 @@ S3_BUCKET_NAME = os.environ["S3_BUCKET_NAME"]
 
 # slack configs
 SLACK_WEBHOOK_URL = os.environ["SLACK_WEBHOOK_URL"]
+SLACK_NOTIFY = True if os.environ["SLACK_NOTIFY"] == "True" else False
 
 # run configs
 DO_RETWEET = True if os.environ["DO_RETWEET"] == "True" else False

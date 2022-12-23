@@ -3,10 +3,10 @@ import time
 import click
 import pendulum
 
-from syaroho_rating.consts import (DEBUG, DO_POST, DO_RETWEET,
+from syaroho_rating.consts import (DEBUG, DO_POST, DO_RETWEET, SLACK_NOTIFY,
                                    TWITTER_API_VERSION, TZ)
 from syaroho_rating.io_handler import get_io_handler
-from syaroho_rating.slack import SlackNotifier
+from syaroho_rating.slack import get_slack_notifier
 from syaroho_rating.syaroho import Syaroho
 from syaroho_rating.twitter import get_twitter
 from syaroho_rating.utils import parse_date_string
@@ -20,7 +20,8 @@ def cli() -> None:
 @cli.command()
 def run() -> None:
     """0時0分JSTに呼ばれる"""
-    slack = SlackNotifier()
+    get_dummy_slack = not SLACK_NOTIFY
+    slack = get_slack_notifier(dummy=get_dummy_slack)
 
     twitter = get_twitter(TWITTER_API_VERSION)
     io_handler = get_io_handler(TWITTER_API_VERSION)

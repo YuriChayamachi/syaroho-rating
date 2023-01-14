@@ -29,8 +29,8 @@ def get_twitter(version: int) -> "Twitter":
         raise ValueError(f"Unsupported version: {version}.")
 
 
-def is_valid_client(client: str) -> bool:
-    return client not in invalid_clients
+def is_valid_client(client: Optional[str]) -> bool:
+    return client is None or client not in invalid_clients
 
 
 RawInfo = Union[List[Dict[str, Any]], Dict[str, Any]]
@@ -79,7 +79,7 @@ class TwitterV1(Twitter):
         self.__api = tweepy.API(auth)
 
     @retry(
-        wait=wait_exponential(multiplier=1, min=1, max=60), stop=stop_after_attempt(5)
+        wait=wait_exponential(multiplier=1, min=1, max=60), stop=stop_after_attempt(3)
     )
     def fetch_result(
         self, date: pendulum.DateTime
@@ -101,7 +101,7 @@ class TwitterV1(Twitter):
         return tweets, raw_response
 
     @retry(
-        wait=wait_exponential(multiplier=1, min=1, max=60), stop=stop_after_attempt(5)
+        wait=wait_exponential(multiplier=1, min=1, max=60), stop=stop_after_attempt(3)
     )
     def fetch_result_dq(self) -> Tuple[List[Tweet], List[Dict[str, Any]]]:
         raw_response = [
@@ -117,7 +117,7 @@ class TwitterV1(Twitter):
         return tweets, raw_response
 
     @retry(
-        wait=wait_exponential(multiplier=1, min=1, max=60), stop=stop_after_attempt(5)
+        wait=wait_exponential(multiplier=1, min=1, max=60), stop=stop_after_attempt(3)
     )
     def fetch_member(self) -> Tuple[List[User], List[Dict[str, Any]]]:
         raw_response = [
@@ -132,7 +132,7 @@ class TwitterV1(Twitter):
         return users, raw_response
 
     @retry(
-        wait=wait_exponential(multiplier=1, min=1, max=60), stop=stop_after_attempt(5)
+        wait=wait_exponential(multiplier=1, min=1, max=60), stop=stop_after_attempt(3)
     )
     def add_members_to_list(self, users: List[User]) -> None:
         screen_names = [u.username for u in users]
@@ -142,7 +142,7 @@ class TwitterV1(Twitter):
         return
 
     @retry(
-        wait=wait_exponential(multiplier=1, min=1, max=60), stop=stop_after_attempt(5)
+        wait=wait_exponential(multiplier=1, min=1, max=60), stop=stop_after_attempt(3)
     )
     def post_with_multiple_media(
         self, message: str, media_list: List[str], **kwargs: Any
@@ -168,14 +168,14 @@ class TwitterV1(Twitter):
         return
 
     @retry(
-        wait=wait_exponential(multiplier=1, min=1, max=60), stop=stop_after_attempt(5)
+        wait=wait_exponential(multiplier=1, min=1, max=60), stop=stop_after_attempt(3)
     )
     def retweet(self, tweet_id: str) -> None:
         self.__api.retweet(tweet_id)
         return
 
     @retry(
-        wait=wait_exponential(multiplier=1, min=1, max=60), stop=stop_after_attempt(5)
+        wait=wait_exponential(multiplier=1, min=1, max=60), stop=stop_after_attempt(3)
     )
     def update_status(self, message: str) -> None:
         self.__api.update_status(message)

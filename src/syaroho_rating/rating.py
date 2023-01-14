@@ -27,7 +27,7 @@ def calc_rating_for_date(
 
     for s in statuses:
         user_name = s.author.username
-        if (s.text == "しゃろほー") and is_valid_client(clean_html_tag(s.source)):
+        if (s.text == "しゃろほー") and is_valid_client(s.source):
             rawtime = s.created_at_ms
             time = rawtime.strftime("%H:%M:%S.%f")[:-3]
 

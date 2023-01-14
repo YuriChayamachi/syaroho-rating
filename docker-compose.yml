@@ -8,7 +8,7 @@ services:
     command: run
     volumes:
       - ./data:/app/data
-      - ./syaroho_rating:/app/syaroho_rating
+      - ./src:/app
   test:
     build: ./
     env_file:

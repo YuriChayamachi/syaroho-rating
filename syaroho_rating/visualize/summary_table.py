@@ -46,7 +46,7 @@ class SummaryTableMaker(object):
             filenames.append(save_path)
         return filenames
 
-    def _make_and_save(self, df_w: pd.DataFrame, save_path: Path) -> None:
+    def _make_and_save(self, df_w: pd.DataFrame, save_path: Path):
 
         # 表の背景色の設定
         colorlists = get_colorlist(df_w["Rating"], n_col=5)

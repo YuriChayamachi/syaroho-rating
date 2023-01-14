@@ -1,6 +1,6 @@
 import datetime as dt
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import List
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -28,10 +28,10 @@ class TableMaker(object):
         self.date = date
         self.header = self._make_header()
 
-    def _make_header(self) -> str:
+    def _make_header(self):
         return "SYAROHO RESULT " + self.date.strftime("(%Y/%m/%d)")
 
-    def _make_and_save(self, df: pd.DataFrame, save_path: Path) -> None:
+    def _make_and_save(self, df: pd.DataFrame, save_path: Path):
         df_ = df.set_index("Rank")
 
         fig, ax = plt.subplots(
@@ -87,18 +87,18 @@ if __name__ == "__main__":
     import random
     import string
 
-    def get_random_string(length: int) -> str:
+    def get_random_string(length):
         letters = string.ascii_lowercase
         result_str = "".join(random.choice(letters) for i in range(length))
         return result_str
 
-    def generate_random_time() -> str:
+    def generate_random_time():
         time = pendulum.datetime(2020, 1, 1).start_of("day")
         return time.add(microseconds=random.randint(-999999, 999999)).strftime(
             "%H:%M:%S.%f"
         )[:-3]
 
-    def generate_dummy_data(i: int) -> Dict[str, Any]:
+    def generate_dummy_data(i):
         return {
             "Rank": i,
             "Name": get_random_string(8),
@@ -110,5 +110,5 @@ if __name__ == "__main__":
 
     # dummy data
     dummy_df = pd.DataFrame([generate_dummy_data(x) for x in range(120)])
-    # files = TableMaker(dummy_df, "sample_header", dt.date(2020, 12, 31)).make()
-    # print(files)
+    files = TableMaker(dummy_df, "sample_header", dt.date(2020, 12, 31)).make()
+    print(files)

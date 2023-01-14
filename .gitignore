@@ -7,4 +7,3 @@ result_table/
 temp/
 .DS_Store
 data/
-local.env

@@ -10,8 +10,8 @@ run:
 
 .PHONY: format
 format:
-	black syaroho_rating main.py
-	isort syaroho_rating main.py
+	black src
+	isort src
 
 .PHONY: test
 test:

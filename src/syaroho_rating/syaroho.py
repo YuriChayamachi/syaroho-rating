@@ -161,8 +161,15 @@ class Syaroho(object):
         print(f"<<<<<<<<<< The Result for date {date} <<<<<<<<<<")
 
         # add members
+        if fetch_tweet:
+            print("Fetching current list members...")
+            all_members = self._fetch_and_save_member()
+            print("Done.")
+        else:
+            print("Loading current list members from storage...")
+            all_members = self.io.get_members()
+            print("Done.")
         print(f"Adding today's participants to member list...")
-        all_members = self._fetch_and_save_member()
         self._add_new_member(statuses, all_members)
         print("Done.")
 

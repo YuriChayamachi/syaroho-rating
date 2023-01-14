@@ -5,11 +5,12 @@ from pathlib import Path
 from typing import Any, Dict, List, Protocol, Union
 
 import boto3
+import tweepy
 from botocore.exceptions import ClientError
 from tenacity import retry, stop_after_attempt, wait_exponential
 
 from syaroho_rating.consts import S3_BUCKET_NAME, STORAGE
-from syaroho_rating.model import Tweet
+from syaroho_rating.model import Tweet, User
 
 
 def get_io_handler(version: int) -> "IOHandler":
@@ -46,6 +47,14 @@ class IOBaseHandler(Protocol):
         ...
 
 
+def json_serial(obj):
+    """JSON serializer for objects not serializable by default json code"""
+
+    if isinstance(obj, dt.datetime):
+        return obj.strftime("%Y-%m-%dT%H:%M:%S.%f%z")
+    raise TypeError("Type %s not serializable" % type(obj))
+
+
 class S3IOBaseHandler(IOBaseHandler):
     temp_dir = Path("temp")
 
@@ -60,7 +69,7 @@ class S3IOBaseHandler(IOBaseHandler):
     def save_dict(self, dict_obj: JsonObj, relative_path: str) -> None:
         temp_path = self.temp_dir / f"{uuid.uuid4()}.json"
         with temp_path.open("w") as f:
-            json.dump(dict_obj, f, indent=4, ensure_ascii=False, default=str)
+            json.dump(dict_obj, f, indent=4, ensure_ascii=False, default=json_serial)
         with temp_path.open("rb") as f:
             self.s3.upload_fileobj(f, S3_BUCKET_NAME, relative_path)
         temp_path.unlink(missing_ok=True)
@@ -110,7 +119,7 @@ class LocalIOBaseHandler(IOBaseHandler):
         file_path = self.base_path / relative_path
         file_path.parent.mkdir(parents=True, exist_ok=True)
         with file_path.open("w") as f:
-            json.dump(dict_obj, f, indent=4, ensure_ascii=False, default=str)
+            json.dump(dict_obj, f, indent=4, ensure_ascii=False, default=json_serial)
         return
 
     def load_dict(self, relative_path: str) -> Any:
@@ -203,11 +212,11 @@ class IOHandlerV1(object):
         self.base_handler.save_dict(statuses, f"{dirname}/{filename}")
         return
 
-    def get_members(self) -> List[Dict[str, Any]]:
+    def get_members(self) -> List[User]:
         dirname = "member"
         filename = "member.json"
         members_dict = self.base_handler.load_dict(f"{dirname}/{filename}")
-        return members_dict["users"]
+        return User.from_responses_v1(members_dict["users"])
 
     def save_members(self, members: JsonObj) -> None:
         dirname = "member"
@@ -253,7 +262,11 @@ class IOHandlerV2(object):
             statuses_dict = self.base_handler.load_dict(f_path)
             data += statuses_dict["data"]
             users += statuses_dict["includes"].get("users", [])
-        tweets = Tweet.from_responses_v2(data, users)
+        data_objs = [tweepy.Tweet(t) for t in statuses_dict["data"]]
+        users_objs = [
+            tweepy.User(u) for u in statuses_dict["includes"].get("users", [])
+        ]
+        tweets = Tweet.from_responses_v2(data_objs, users_objs)
         return tweets
 
     def save_statuses(self, all_info_dict: JsonObj, date: dt.date) -> None:
@@ -272,9 +285,11 @@ class IOHandlerV2(object):
 
         filename = f"{date_str}.json"
         statuses_dict = self.base_handler.load_dict(f"{dirname}/{filename}")
-        data = statuses_dict["data"]
-        users = statuses_dict["includes"].get("users", [])
-        tweets = Tweet.from_responses_v2(data, users)
+        data_objs = [tweepy.Tweet(t) for t in statuses_dict["data"]]
+        users_objs = [
+            tweepy.User(u) for u in statuses_dict["includes"].get("users", [])
+        ]
+        tweets = Tweet.from_responses_v2(data_objs, users_objs)
         return tweets
 
     def save_statuses_dq(self, all_info_dict: JsonObj, date: dt.date) -> None:
@@ -287,11 +302,12 @@ class IOHandlerV2(object):
         self.base_handler.save_dict(all_info_dict, f"{dirname}/{filename}")
         return
 
-    def get_members(self) -> Dict[str, Any]:
+    def get_members(self) -> List[User]:
         dirname = "member_v2"
         filename = "member.json"
         members_dict = self.base_handler.load_dict(f"{dirname}/{filename}")
-        return members_dict
+        user_objs = [tweepy.User(u) for u in members_dict["data"]]
+        return User.from_responses_v2(user_objs)
 
     def save_members(self, members: JsonObj) -> None:
         dirname = "member_v2"

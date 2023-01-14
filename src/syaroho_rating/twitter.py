@@ -29,8 +29,8 @@ def get_twitter(version: int) -> "Twitter":
         raise ValueError(f"Unsupported version: {version}.")
 
 
-def is_valid_client(client: str) -> bool:
-    return client not in invalid_clients
+def is_valid_client(client: Optional[str]) -> bool:
+    return client is None or client not in invalid_clients
 
 
 RawInfo = Union[List[Dict[str, Any]], Dict[str, Any]]

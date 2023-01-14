@@ -64,7 +64,7 @@ class S3IOBaseHandler(IOBaseHandler):
         self.temp_dir.mkdir(exist_ok=True)
 
     @retry(
-        wait=wait_exponential(multiplier=1, min=1, max=10), stop=stop_after_attempt(5)
+        wait=wait_exponential(multiplier=1, min=1, max=10), stop=stop_after_attempt(3)
     )
     def save_dict(self, dict_obj: JsonObj, relative_path: str) -> None:
         temp_path = self.temp_dir / f"{uuid.uuid4()}.json"
@@ -76,7 +76,7 @@ class S3IOBaseHandler(IOBaseHandler):
         return
 
     @retry(
-        wait=wait_exponential(multiplier=1, min=1, max=10), stop=stop_after_attempt(5)
+        wait=wait_exponential(multiplier=1, min=1, max=10), stop=stop_after_attempt(3)
     )
     def load_dict(self, relative_path: str) -> Any:
         temp_path = self.temp_dir / f"{uuid.uuid4()}.json"
@@ -94,7 +94,7 @@ class S3IOBaseHandler(IOBaseHandler):
         raise NotImplementedError
 
     @retry(
-        wait=wait_exponential(multiplier=1, min=1, max=10), stop=stop_after_attempt(5)
+        wait=wait_exponential(multiplier=1, min=1, max=10), stop=stop_after_attempt(3)
     )
     def list_path(self, relative_path: str) -> List[Any]:
         """バケットルートからの相対パスのリストを返す"""

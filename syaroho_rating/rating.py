@@ -1,4 +1,3 @@
-import argparse
 import copy
 import math
 from typing import Dict, List, Tuple
@@ -7,15 +6,15 @@ import numpy as np
 import pandas as pd
 import pendulum
 
-from syaroho_rating.io_handler import IOHandlerBase
+from syaroho_rating.model import Tweet
 from syaroho_rating.twitter import is_valid_client
-from syaroho_rating.utils import clean_html_tag, timedelta_to_ms, tweetid_to_datetime
+from syaroho_rating.utils import clean_html_tag, timedelta_to_ms
 
 
 def calc_rating_for_date(
-    date: pendulum.date,
-    statuses: List,
-    dq_statuses: List,
+    date: pendulum.DateTime,
+    statuses: List[Tweet],
+    dq_statuses: List[Tweet],
     rating_infos: Dict,
     exag: float,
 ) -> Tuple[List, Dict]:
@@ -26,10 +25,10 @@ def calc_rating_for_date(
 
     ymd = date.strftime("%Y%m%d")
 
-    result = statuses
-    for r in result:
-        if (r["text"] == "しゃろほー") and is_valid_client(clean_html_tag(r["source"])):
-            rawtime = tweetid_to_datetime(r["id"])
+    for s in statuses:
+        user_name = s.author.username
+        if (s.text == "しゃろほー") and is_valid_client(clean_html_tag(s.source)):
+            rawtime = s.created_at_ms
             time = rawtime.strftime("%H:%M:%S.%f")[:-3]
 
             record = timedelta_to_ms(rawtime - date)
@@ -37,19 +36,19 @@ def calc_rating_for_date(
             score = bouns - abs(record)
             daily_infos.append(
                 {
-                    "screen_name": ("" + r["user"]["screen_name"]),
+                    "screen_name": ("" + user_name),
                     "rank_normal": 1,
                     "rank": 0.5,
                     "perf": -1,
                     "time": time,
                     "score": score,
-                    "id": r["id"],
+                    "id": s.id,
                 }
             )
-            player_list.append(r["user"]["screen_name"])
+            player_list.append(user_name)
 
-            if not r["user"]["screen_name"] in rating_infos:
-                rating_infos[r["user"]["screen_name"]] = {
+            if not user_name in rating_infos:
+                rating_infos[user_name] = {
                     "best_time": "None",
                     "best_score": -1000000,
                     "highest": 0,
@@ -65,39 +64,37 @@ def calc_rating_for_date(
                 }
 
             # ベストスコア、ベストタイムの更新
-            if score >= rating_infos[r["user"]["screen_name"]]["best_score"]:
-                rating_infos[r["user"]["screen_name"]]["best_score"] = score
-                rating_infos[r["user"]["screen_name"]]["best_time"] = time
+            if score >= rating_infos[user_name]["best_score"]:
+                rating_infos[user_name]["best_score"] = score
+                rating_infos[user_name]["best_time"] = time
 
     # ツイ消しを見た場合
-    result_dq = dq_statuses
-    for r in result_dq:
-        if (r["text"] == "しゃろほー") and is_valid_client(clean_html_tag(r["source"])):
-            rawtime = tweetid_to_datetime(r["id"])
+    for s in dq_statuses:
+        user_name = s.author.username
+        if (s.text == "しゃろほー") and is_valid_client(clean_html_tag(s.source)):
+            rawtime = s.created_at_ms
             time = rawtime.strftime("%H:%M:%S.%f")[:-3]
 
             record = timedelta_to_ms(rawtime - date)
 
-            if (not (r["user"]["screen_name"] in player_list)) and (
-                abs(record) <= 60000
-            ):
-                player_list.append(r["user"]["screen_name"])
+            if (not (user_name in player_list)) and (abs(record) <= 60000):
+                player_list.append(user_name)
                 bouns = 1000 if record >= 0 else 0
                 score = bouns - abs(record)
                 daily_infos.append(
                     {
-                        "screen_name": ("" + r["user"]["screen_name"]),
+                        "screen_name": ("" + user_name),
                         "rank_normal": 1,
                         "rank": 0.5,
                         "perf": -1,
                         "time": time,
                         "score": score,
-                        "id": r["id"],
+                        "id": s.id,
                     }
                 )
 
-                if not r["user"]["screen_name"] in rating_infos:
-                    rating_infos[r["user"]["screen_name"]] = {
+                if not user_name in rating_infos:
+                    rating_infos[user_name] = {
                         "best_time": "None",
                         "best_score": -1000000,
                         "highest": 0,
@@ -113,9 +110,9 @@ def calc_rating_for_date(
                     }
 
                 # ベストスコア、ベストタイムの更新
-                if score >= rating_infos[r["user"]["screen_name"]]["best_score"]:
-                    rating_infos[r["user"]["screen_name"]]["best_score"] = score
-                    rating_infos[r["user"]["screen_name"]]["best_time"] = time
+                if score >= rating_infos[user_name]["best_score"]:
+                    rating_infos[user_name]["best_score"] = score
+                    rating_infos[user_name]["best_time"] = time
 
     for i in range(len(daily_infos)):
         # inner_rateの読み込み
@@ -193,8 +190,8 @@ def calc_rating_for_date(
         denom = 0.0
 
         for p, j in zip(perf_lists[::-1], range(1, len(perf_lists) + 1)):
-            numer += 2.0 ** (p / 800.0) * 0.9 ** j
-            denom += 0.9 ** j
+            numer += 2.0 ** (p / 800.0) * 0.9**j
+            denom += 0.9**j
 
         new_inner_rate = 800.0 * math.log2(numer / denom)
         rating_infos[daily_infos[i]["screen_name"]]["inner_rate"] = int(
@@ -208,8 +205,8 @@ def calc_rating_for_date(
         att = len(perf_lists)
         penalty = (
             1200.0
-            * (((1.0 - 0.81 ** att) ** 0.5) / (1.0 - 0.9 ** att) - 1.0)
-            / (19.0 ** 0.5 - 1.0)
+            * (((1.0 - 0.81**att) ** 0.5) / (1.0 - 0.9**att) - 1.0)
+            / (19.0**0.5 - 1.0)
         )
         new_rate = new_inner_rate - penalty
         new_rate = (

@@ -4,6 +4,8 @@ import os
 
 import numpy as np
 
+TZ = "Asia/Tokyo"
+
 # twitter configs
 CONSUMER_KEY = os.environ["CONSUMER_KEY"]
 CONSUMER_SECRET = os.environ["CONSUMER_SECRET"]
@@ -12,12 +14,16 @@ ACCESS_TOKEN_SECRET = os.environ["ACCESS_TOKEN_SECRET"]
 ENVIRONMENT_NAME = os.environ["ENVIRONMENT_NAME"]
 LIST_SLUG = os.environ["LIST_SLUG"]
 ACCOUNT_NAME = os.environ["ACCOUNT_NAME"]
+BEARER_TOKEN = os.environ["TWITTER_BEARER_TOKEN"]
+SYAROHO_LIST_ID = os.environ["SYAROHO_LIST_ID"]
+TWITTER_API_VERSION = int(os.environ["TWITTER_API_VERSION"])
 
 # s3 configs
 S3_BUCKET_NAME = os.environ["S3_BUCKET_NAME"]
 
 # slack configs
 SLACK_WEBHOOK_URL = os.environ["SLACK_WEBHOOK_URL"]
+SLACK_NOTIFY = True if os.environ["SLACK_NOTIFY"] == "True" else False
 
 # run configs
 DO_RETWEET = True if os.environ["DO_RETWEET"] == "True" else False

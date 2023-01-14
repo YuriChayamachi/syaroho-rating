@@ -1,28 +1,27 @@
-from os import EX_USAGE
 from typing import Dict, List, Tuple
 
 import pandas as pd
 import pendulum
 from tweepy.errors import Forbidden
 
-from syaroho_rating.io_handler import IOHandlerBase
+from syaroho_rating.io_handler import IOHandler
+from syaroho_rating.model import Tweet, User
 from syaroho_rating.rating import calc_rating_for_date, summarize_rating_info
 from syaroho_rating.twitter import Twitter, is_valid_client
-from syaroho_rating.utils import clean_html_tag, timedelta_to_ms, tweetid_to_datetime
+from syaroho_rating.utils import (clean_html_tag, timedelta_to_ms,
+                                  tweetid_to_datetime)
 from syaroho_rating.visualize.graph import GraphMaker
 from syaroho_rating.visualize.table import TableMaker
 
 
-def filter_and_sort(statuses: List, date: pendulum.date) -> List[Dict]:
+def filter_and_sort(statuses: List[Tweet], date: pendulum.DateTime) -> List[Dict]:
     # 参加者リストの作成
     participants = []
     for s in statuses:
-        if not (
-            (s["text"] == "しゃろほー") and is_valid_client(clean_html_tag(s["source"]))
-        ):
+        if not ((s.text == "しゃろほー") and is_valid_client(clean_html_tag(s.source))):
             continue
 
-        rawtime = tweetid_to_datetime(s["id"])
+        rawtime = tweetid_to_datetime(s.id)
         time = rawtime.strftime("%S.%f")[:-3]
 
         record = timedelta_to_ms(rawtime - date)
@@ -30,7 +29,7 @@ def filter_and_sort(statuses: List, date: pendulum.date) -> List[Dict]:
         score = bouns - abs(record)
         participants.append(
             {
-                "screen_name": ("" + s["user"]["screen_name"]),
+                "screen_name": ("" + s.author.username),
                 "time": time,
                 "score": score,
             }
@@ -45,40 +44,41 @@ def filter_and_sort(statuses: List, date: pendulum.date) -> List[Dict]:
 
 
 class Syaroho(object):
-    def __init__(self, twitter_api: Twitter, io_handler: IOHandlerBase):
-        self.twitter = twitter_api
+    def __init__(self, twitter: Twitter, io_handler: IOHandler):
+        self.twitter = twitter
         self.io = io_handler
 
-    def _fetch_and_save_result(self, date) -> List:
-        result = self.twitter.fetch_result(date)
+    def _fetch_and_save_result(self, date: pendulum.DateTime) -> List[Tweet]:
+        statuses, raw_response = self.twitter.fetch_result(date)
 
-        self.io.save_statuses(result, date)
-        return result
+        self.io.save_statuses(raw_response, date)
+        return statuses
 
-    def _fetch_and_save_result_dq(self, date) -> List:
-        result = self.twitter.fetch_result_dq()
+    def _fetch_and_save_result_dq(self, date: pendulum.DateTime) -> List[Tweet]:
+        statuses, raw_response = self.twitter.fetch_result_dq()
 
-        self.io.save_statuses_dq(result, date)
-        return result
+        self.io.save_statuses_dq(raw_response, date)
+        return statuses
 
-    def _fetch_and_save_member(self) -> List:
-        result = self.twitter.fetch_member()
+    def _fetch_and_save_member(self) -> List[User]:
+        users, raw_response = self.twitter.fetch_member()
 
-        self.io.save_members(result)
-        return result
+        self.io.save_members(raw_response)
+        return users
 
-    def _add_new_member(self, statuses: List, users: List):
-        existing_user_names = [u["screen_name"] for u in users]
+    def _add_new_member(self, statuses: List[Tweet], users: List[User]) -> None:
+        existing_user_names = [u.username for u in users]
 
         competitor_names = [
-            s["user"]["screen_name"]
+            s.author.username
             for s in statuses
-            if s["text"] == "しゃろほー"
+            if s.text == "しゃろほー"
             # s["source"] is like "<a href="url_to_client">client_name</a>"
-            and is_valid_client(clean_html_tag(s["source"]))
+            and is_valid_client(s.source)
         ]
 
-        new_members = set(competitor_names) - set(existing_user_names)
+        new_member_names = set(competitor_names) - set(existing_user_names)
+        new_members = [u for u in users if u.username in new_member_names]
 
         if len(new_members):
             self.twitter.add_members_to_list(list(new_members))
@@ -87,7 +87,7 @@ class Syaroho(object):
             print("no new members.")
         return
 
-    def run_dq(self, do_post: bool = False):
+    def run_dq(self, do_post: bool = False) -> List[Tweet]:
         today = pendulum.today("Asia/Tokyo")
         statuses = self._fetch_and_save_result_dq(today)
         posts = filter_and_sort(statuses, today)
@@ -106,8 +106,8 @@ class Syaroho(object):
 
     def run(
         self,
-        date: pendulum.date,
-        dq_statuses: List,
+        date: pendulum.DateTime,
+        dq_statuses: List[Tweet],
         fetch_tweet: bool = True,
         do_post: bool = False,
         do_retweet: bool = False,
@@ -161,8 +161,15 @@ class Syaroho(object):
         print(f"<<<<<<<<<< The Result for date {date} <<<<<<<<<<")
 
         # add members
+        if fetch_tweet:
+            print("Fetching current list members...")
+            all_members = self._fetch_and_save_member()
+            print("Done.")
+        else:
+            print("Loading current list members from storage...")
+            all_members = self.io.get_members()
+            print("Done.")
         print(f"Adding today's participants to member list...")
-        all_members = self._fetch_and_save_member()
         self._add_new_member(statuses, all_members)
         print("Done.")
 
@@ -176,12 +183,12 @@ class Syaroho(object):
             print("Creating result table...")
             tm = TableMaker(df_result, date)
             table_paths = tm.make()
-            table_paths = [str(p) for p in table_paths]
+            table_paths_str = [str(p) for p in table_paths]
             print("Done.")
 
             print("Posting today's result...")
             message = tm._make_header()
-            self.twitter.post_with_multiple_media(message, table_paths)
+            self.twitter.post_with_multiple_media(message, table_paths_str)
             print("Created table paths: ", table_paths)
             print("Done.")
 
@@ -198,7 +205,7 @@ class Syaroho(object):
 
         return summary_df, rating_infos
 
-    def _retweet_winners(self, df_ratings: pd.DataFrame):
+    def _retweet_winners(self, df_ratings: pd.DataFrame) -> None:
         df_top = df_ratings[df_ratings["Rank"] == 1].reset_index()
         for i, row in df_top.iterrows():
             try:
@@ -209,19 +216,19 @@ class Syaroho(object):
                 print(f"Retweet is not permissive for user {row.id}. Skip.")
         return
 
-    def reply_to_mentions(self, summary_df: pd.DataFrame, rating_infos: Dict):
+    def reply_to_mentions(self, summary_df: pd.DataFrame, rating_infos: Dict) -> None:
         self.twitter.listen_and_reply(rating_infos, summary_df)
         return
 
     def backfill(
         self,
-        start_date: pendulum.date,
-        end_date: pendulum.date,
+        start_date: pendulum.DateTime,
+        end_date: pendulum.DateTime,
         do_post: bool = False,
         do_retweet: bool = False,
         fetch_tweet: bool = False,
         exag_start: bool = False,
-    ):
+    ) -> None:
         for i, date in enumerate(pendulum.period(start_date, end_date).range("days")):
             print(f"Executing backfill for {date}...")
             try:
@@ -236,9 +243,9 @@ class Syaroho(object):
                 self.run(date, dq_statuses, fetch_tweet, do_post, do_retweet)
         print("done.")
 
-    def fetch_and_save_tweet(self, date, save: bool = False):
-        result = self.twitter.fetch_result(date)
-        print(result)
+    def fetch_and_save_tweet(self, date: pendulum.DateTime, save: bool = False) -> None:
+        _, raw_response = self.twitter.fetch_result(date)
+        print(raw_response)
         if save:
-            self.io.save_statuses(result, date)
+            self.io.save_statuses(raw_response, date)
         return

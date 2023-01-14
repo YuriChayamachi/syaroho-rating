@@ -4,7 +4,7 @@ matplotlib==3.5.1
 boto3==1.20.41
 timeout-decorator==0.5.0
 pendulum==2.1.2
-tweepy==4.4.0
+tweepy==4.12.1
 click==8.0.3
 slackweb==1.0.5
 tenacity==8.1.0

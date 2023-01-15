@@ -6,6 +6,7 @@ build:
 
 .PHONY: run
 run:
+	docker compose build
 	docker compose run syaroho-rating
 
 .PHONY: format

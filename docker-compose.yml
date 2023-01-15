@@ -8,7 +8,6 @@ services:
     command: run
     volumes:
       - ./data:/app/data
-      - ./src:/app
   test:
     build: ./
     env_file:

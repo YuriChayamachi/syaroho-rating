@@ -3,7 +3,10 @@ name: Docker Image CI
 on:
   push:
     branches:
-      - master
+      - develop
+    pull_request:
+      branches:
+        - 16-feature-ステージング環境を作る
 
 jobs:
 
@@ -29,7 +32,7 @@ jobs:
         ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
         ECR_REPOSITORY: ${{ secrets.AWS_ECR_REPO_NAME }}
       run: |
-        docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:latest -t $ECR_REGISTRY/$ECR_REPOSITORY:$(git rev-parse --short HEAD) .
-        docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
+        docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:latest-stg -t $ECR_REGISTRY/$ECR_REPOSITORY:$(git rev-parse --short HEAD) .
+        docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest-stg
         docker push $ECR_REGISTRY/$ECR_REPOSITORY:$(git rev-parse --short HEAD)
     

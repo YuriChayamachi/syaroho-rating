@@ -7,7 +7,8 @@ from typing import Any, Dict, List, Protocol, Union
 import boto3
 import tweepy
 from botocore.exceptions import ClientError
-from tenacity import retry, stop_after_attempt, wait_exponential
+from tenacity import (retry, retry_if_not_exception_type, stop_after_attempt,
+                      wait_exponential)
 
 from syaroho_rating.consts import S3_BUCKET_NAME, STORAGE
 from syaroho_rating.model import Tweet, User
@@ -76,7 +77,9 @@ class S3IOBaseHandler(IOBaseHandler):
         return
 
     @retry(
-        wait=wait_exponential(multiplier=1, min=1, max=10), stop=stop_after_attempt(3)
+        wait=wait_exponential(multiplier=1, min=1, max=10),
+        stop=stop_after_attempt(3),
+        retry=retry_if_not_exception_type(FileNotFoundError),
     )
     def load_dict(self, relative_path: str) -> Any:
         temp_path = self.temp_dir / f"{uuid.uuid4()}.json"

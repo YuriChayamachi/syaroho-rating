@@ -6,7 +6,7 @@ on:
       - develop
     pull_request:
       branches:
-        - 16-feature-ステージング環境を作る
+        - '16-feature-ステージング環境を作る'
 
 jobs:
 

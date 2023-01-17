@@ -63,7 +63,8 @@ def run() -> None:
         import traceback
 
         trace = traceback.format_exc()
-        slack.notify_failed(title=f"{today_str} しゃろほーでエラー発生", text=trace)
+        errmsg = "\n".join(["<!channel>", trace])  # channel にメンション
+        slack.notify_failed(title=f"{today_str} しゃろほーでエラー発生", text=errmsg)
         raise
 
     return

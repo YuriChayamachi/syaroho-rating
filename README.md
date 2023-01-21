@@ -1,5 +1,7 @@
 # syaroho-rating
 
+![release workflow](https://github.com/YuriChayamachi/syaroho-rating/actions/workflows/docker-image.yml/badge.svg)
+
 しゃろほーレーティングの運営ツールです。
 
 ## 使い方

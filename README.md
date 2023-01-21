@@ -1,6 +1,9 @@
 # syaroho-rating
 
 ![release workflow](https://github.com/YuriChayamachi/syaroho-rating/actions/workflows/docker-image.yml/badge.svg)
+![release version](https://img.shields.io/github/v/release/YuriChayamachi/syaroho-rating)
+![last commit](https://img.shields.io/github/last-commit/YuriChayamachi/syaroho-rating)
+![release date](https://img.shields.io/github/release-date/YuriChayamachi/syaroho-rating)
 
 しゃろほーレーティングの運営ツールです。
 

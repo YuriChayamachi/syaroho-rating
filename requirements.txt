@@ -8,3 +8,4 @@ tweepy==4.12.1
 click==8.0.3
 slackweb==1.0.5
 tenacity==8.1.0
+tweepy-authlib==1.0.2

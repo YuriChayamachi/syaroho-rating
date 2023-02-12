@@ -14,7 +14,7 @@ from syaroho_rating.consts import S3_BUCKET_NAME, STORAGE
 from syaroho_rating.model import Tweet, User
 
 
-def get_io_handler(version: int) -> "IOHandler":
+def get_io_handler(twitter_api_version: str) -> "IOHandler":
     base_handler: IOBaseHandler
     if STORAGE == "s3":
         base_handler = S3IOBaseHandler()
@@ -23,12 +23,14 @@ def get_io_handler(version: int) -> "IOHandler":
     else:
         raise RuntimeError(f"Unexpected STORAGE variable: {STORAGE}")
 
-    if version == 1:
+    if twitter_api_version == "1":
         return IOHandlerV1(base_handler)
-    if version == 2:
+    if twitter_api_version == "2":
         return IOHandlerV2(base_handler)
+    if twitter_api_version == "1C":
+        return IOHandlerV1(base_handler)
     else:
-        raise RuntimeError(f"Unexpected version: {version}")
+        raise RuntimeError(f"Unexpected version: {twitter_api_version}")
 
 
 JsonObj = Union[List[Dict[str, Any]], Dict[str, Any]]
@@ -167,7 +169,7 @@ class IOHandler(Protocol):
         ...
 
 
-class IOHandlerV1(object):
+class IOHandlerV1(IOHandler):
     def __init__(self, base_handler: IOBaseHandler) -> None:
         self.base_handler = base_handler
 
@@ -246,7 +248,7 @@ class IOHandlerV1(object):
         return
 
 
-class IOHandlerV2(object):
+class IOHandlerV2(IOHandler):
     def __init__(self, base_handler: IOBaseHandler) -> None:
         self.base_handler = base_handler
 

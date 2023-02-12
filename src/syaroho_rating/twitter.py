@@ -1,5 +1,7 @@
 import datetime as dt
+import pickle
 import time
+from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Protocol, Tuple, Union
 
 import pandas as pd
@@ -8,23 +10,27 @@ import tweepy
 from tenacity import retry, stop_after_attempt, wait_exponential
 from tweepy import Cursor, Stream
 from tweepy.models import Status
+from tweepy_authlib import CookieSessionUserHandler
 
 from syaroho_rating.consts import (ACCESS_TOKEN_KEY, ACCESS_TOKEN_SECRET,
                                    ACCOUNT_NAME, BEARER_TOKEN, CONSUMER_KEY,
                                    CONSUMER_SECRET, ENVIRONMENT_NAME,
-                                   LIST_SLUG, SYAROHO_LIST_ID, invalid_clients,
-                                   reply_patience)
+                                   LIST_SLUG, SYAROHO_LIST_ID,
+                                   TWITTER_COOKIE_PATH, TWITTER_PASSWORD,
+                                   invalid_clients, reply_patience)
 from syaroho_rating.message import create_reply_message
 from syaroho_rating.model import Tweet, User
-from syaroho_rating.utils import tweetid_to_datetime
+from syaroho_rating.utils import datetime_to_tweetid, tweetid_to_datetime
 from syaroho_rating.visualize.graph import GraphMaker
 
 
-def get_twitter(version: int) -> "Twitter":
-    if version == 1:
+def get_twitter(version: str) -> "Twitter":
+    if version == "1":
         return TwitterV1()
-    elif version == 2:
+    elif version == "2":
         return TwitterV2()
+    elif version == "1C":
+        return TwitterV1C()
     else:
         raise ValueError(f"Unsupported version: {version}.")
 
@@ -76,7 +82,7 @@ class TwitterV1(Twitter):
     ) -> None:
         auth = tweepy.OAuthHandler(consumer_key, consumer_secret)
         auth.set_access_token(access_token_key, access_token_secret)
-        self.__api = tweepy.API(auth)
+        self.api = tweepy.API(auth)
 
     @retry(
         wait=wait_exponential(multiplier=1, min=1, max=60), stop=stop_after_attempt(3)
@@ -90,7 +96,7 @@ class TwitterV1(Twitter):
         raw_response = [
             x._json
             for x in Cursor(
-                self.__api.search_30_day,
+                self.api.search_30_day,
                 label=ENVIRONMENT_NAME,
                 query="しゃろほー",
                 fromDate=from_date.in_tz("utc").strftime("%Y%m%d%H%M"),
@@ -107,7 +113,7 @@ class TwitterV1(Twitter):
         raw_response = [
             x._json
             for x in Cursor(
-                self.__api.list_timeline,
+                self.api.list_timeline,
                 owner_screen_name=ACCOUNT_NAME,
                 slug=LIST_SLUG,
                 include_rts=False,
@@ -123,7 +129,7 @@ class TwitterV1(Twitter):
         raw_response = [
             x._json
             for x in Cursor(
-                self.__api.get_list_members,
+                self.api.get_list_members,
                 owner_screen_name=ACCOUNT_NAME,
                 slug=LIST_SLUG,
             ).items(1000)
@@ -136,7 +142,7 @@ class TwitterV1(Twitter):
     )
     def add_members_to_list(self, users: List[User]) -> None:
         screen_names = [u.username for u in users]
-        self.__api.add_list_members(
+        self.api.add_list_members(
             screen_name=screen_names, slug=LIST_SLUG, owner_screen_name=ACCOUNT_NAME
         )
         return
@@ -149,10 +155,10 @@ class TwitterV1(Twitter):
     ) -> None:
         media_ids = []
         for media in media_list:
-            res = self.__api.media_upload(media)
+            res = self.api.media_upload(media)
             media_ids.append(res.media_id)
 
-        self.__api.update_status(status=message, media_ids=media_ids, **kwargs)
+        self.api.update_status(status=message, media_ids=media_ids, **kwargs)
         return
 
     def listen_and_reply(
@@ -171,14 +177,14 @@ class TwitterV1(Twitter):
         wait=wait_exponential(multiplier=1, min=1, max=60), stop=stop_after_attempt(3)
     )
     def retweet(self, tweet_id: str) -> None:
-        self.__api.retweet(tweet_id)
+        self.api.retweet(tweet_id)
         return
 
     @retry(
         wait=wait_exponential(multiplier=1, min=1, max=60), stop=stop_after_attempt(3)
     )
     def update_status(self, message: str) -> None:
-        self.__api.update_status(message)
+        self.api.update_status(message)
         return
 
 
@@ -273,6 +279,66 @@ class Listener(Stream):
             rating_summary=self.rating_summary,
             twitter=self.twitter,
         )
+
+
+class TwitterV1C(TwitterV1, Twitter):
+    def __init__(self) -> None:
+        if Path(TWITTER_COOKIE_PATH).exists():
+            print("auth by saved cookie")
+            with open(TWITTER_COOKIE_PATH, "rb") as f:
+                cookies = pickle.load(f)
+            auth = CookieSessionUserHandler(cookies=cookies)
+        else:
+            print("auth by password")
+            auth = CookieSessionUserHandler(
+                screen_name=ACCOUNT_NAME, password=TWITTER_PASSWORD
+            )
+            cookies = auth.get_cookies()
+            with open(TWITTER_COOKIE_PATH, "wb") as f:
+                pickle.dump(cookies, f)
+
+        self.api = tweepy.API(auth)
+
+    @retry(
+        wait=wait_exponential(multiplier=1, min=1, max=60), stop=stop_after_attempt(3)
+    )
+    def fetch_result(
+        self, date: pendulum.DateTime
+    ) -> Tuple[List[Tweet], List[Dict[str, Any]]]:
+        target_date = pendulum.instance(date, "Asia/Tokyo")
+        from_date = target_date.subtract(minutes=1)
+        to_date = target_date.add(minutes=1)
+        raw_response = [
+            x._json
+            for x in Cursor(
+                self.api.search_tweets,
+                q="しゃろほー",
+                since_id=datetime_to_tweetid(from_date),
+                max_id=datetime_to_tweetid(to_date),
+            ).items(500)
+        ]
+        tweets = Tweet.from_responses_v1(raw_response)
+        return tweets, raw_response
+
+    @retry(
+        wait=wait_exponential(multiplier=1, min=1, max=60), stop=stop_after_attempt(3)
+    )
+    def post_with_multiple_media(
+        self, message: str, media_list: List[str], **kwargs: Any
+    ) -> None:
+        media_ids = []
+        for media in media_list:
+            res = self.api.media_upload(media)
+            media_ids.append(res.media_id)
+
+        self.api.update_status(status=message, media_ids=media_ids, **kwargs)
+        return
+
+    def listen_and_reply(
+        self, rating_infos: Dict[str, Any], summary_df: pd.DataFrame
+    ) -> None:
+        print("Streaming is not available")
+        pass
 
 
 EXPANSIONS = [

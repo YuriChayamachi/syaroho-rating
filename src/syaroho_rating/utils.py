@@ -53,6 +53,12 @@ def tweetid_to_datetime(tweetid: str) -> pendulum.DateTime:
     return rawtime.in_timezone("Asia/Tokyo")
 
 
+def datetime_to_tweetid(datetime: pendulum.DateTime) -> str:
+    timedelta = datetime.in_timezone("UTC") - pendulum.datetime(1970, 1, 1, tz="UTC")
+    tweet_id = (timedelta.total_seconds() * 1000 - 1288834974657) * (2**22)
+    return str(int(tweet_id))
+
+
 def clean_html_tag(text: str) -> str:
     cleanr = re.compile("<.*?>")
     cleantext = re.sub(cleanr, "", text)

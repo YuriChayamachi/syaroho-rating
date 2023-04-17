@@ -16,4 +16,6 @@ format:
 
 .PHONY: test
 test:
-	mypy syaroho_rating main.py
+	black --check src
+	isort --check --diff src
+	mypy src

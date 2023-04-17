@@ -84,6 +84,14 @@ class TwitterV1(Twitter):
         auth.set_access_token(access_token_key, access_token_secret)
         self.api = tweepy.API(auth)
 
+        if ENVIRONMENT_NAME is None:
+            raise ValueError("Please set ENVIRONMENT_NAME")
+        self.environment_name = ENVIRONMENT_NAME
+
+        if LIST_SLUG is None:
+            raise ValueError("Please set LIST_SLUG")
+        self.list_slug = LIST_SLUG
+
     @retry(
         wait=wait_exponential(multiplier=1, min=1, max=60), stop=stop_after_attempt(3)
     )
@@ -97,7 +105,7 @@ class TwitterV1(Twitter):
             x._json
             for x in Cursor(
                 self.api.search_30_day,
-                label=ENVIRONMENT_NAME,
+                label=self.environment_name,
                 query="しゃろほー",
                 fromDate=from_date.in_tz("utc").strftime("%Y%m%d%H%M"),
                 toDate=to_date.in_tz("utc").strftime("%Y%m%d%H%M"),
@@ -110,12 +118,14 @@ class TwitterV1(Twitter):
         wait=wait_exponential(multiplier=1, min=1, max=60), stop=stop_after_attempt(3)
     )
     def fetch_result_dq(self) -> Tuple[List[Tweet], List[Dict[str, Any]]]:
+        # tweet されてから search API で拾えるようになるまでに時間がかかるため、速報はリストから取得
+        # (リストからは瞬時に取得できる)
         raw_response = [
             x._json
             for x in Cursor(
                 self.api.list_timeline,
                 owner_screen_name=ACCOUNT_NAME,
-                slug=LIST_SLUG,
+                slug=self.list_slug,
                 include_rts=False,
             ).items(1000)
         ]
@@ -131,7 +141,7 @@ class TwitterV1(Twitter):
             for x in Cursor(
                 self.api.get_list_members,
                 owner_screen_name=ACCOUNT_NAME,
-                slug=LIST_SLUG,
+                slug=self.list_slug,
             ).items(1000)
         ]
         users = User.from_responses_v1(raw_response)
@@ -143,7 +153,7 @@ class TwitterV1(Twitter):
     def add_members_to_list(self, users: List[User]) -> None:
         screen_names = [u.username for u in users]
         self.api.add_list_members(
-            screen_name=screen_names, slug=LIST_SLUG, owner_screen_name=ACCOUNT_NAME
+            screen_name=screen_names, slug=self.list_slug, owner_screen_name=ACCOUNT_NAME
         )
         return
 
@@ -283,13 +293,14 @@ class Listener(Stream):
 
 class TwitterV1C(TwitterV1, Twitter):
     def __init__(self) -> None:
+        if TWITTER_PASSWORD is None:
+            raise ValueError("Please set TWITTER_PASSWORD")
+
         if Path(TWITTER_COOKIE_PATH).exists():
-            print("auth by saved cookie")
             with open(TWITTER_COOKIE_PATH, "rb") as f:
                 cookies = pickle.load(f)
             auth = CookieSessionUserHandler(cookies=cookies)
         else:
-            print("auth by password")
             auth = CookieSessionUserHandler(
                 screen_name=ACCOUNT_NAME, password=TWITTER_PASSWORD
             )
@@ -298,6 +309,14 @@ class TwitterV1C(TwitterV1, Twitter):
                 pickle.dump(cookies, f)
 
         self.api = tweepy.API(auth)
+
+        if ENVIRONMENT_NAME is None:
+            raise ValueError("Please set ENVIRONMENT_NAME")
+        self.environment_name = ENVIRONMENT_NAME
+
+        if LIST_SLUG is None:
+            raise ValueError("Please set LIST_SLUG")
+        self.list_slug = LIST_SLUG
 
     @retry(
         wait=wait_exponential(multiplier=1, min=1, max=60), stop=stop_after_attempt(3)
@@ -446,6 +465,15 @@ class TwitterV2(Twitter):
             access_token_secret=ACCESS_TOKEN_SECRET,
         )
 
+        if BEARER_TOKEN is None:
+            raise ValueError("Please set TWITTER_BEARER_TOKEN")
+        self.bearer_token = BEARER_TOKEN
+
+        if SYAROHO_LIST_ID is None:
+            raise ValueError("Please set SYAROHO_LIST_ID")
+        self.syaroho_list_id = SYAROHO_LIST_ID
+
+
     def update_status(self, message: str) -> None:
         self.client.create_tweet(text=message)
         return
@@ -566,7 +594,9 @@ class TwitterV2(Twitter):
         return tweet_objects, all_info_dict
 
     def fetch_result_dq(self) -> Tuple[List[Tweet], Dict[str, Any]]:
-        tweets, all_info_dict = self.fetch_list_tweets(list_id=SYAROHO_LIST_ID)
+        # tweet されてから search API で拾えるようになるまでに時間がかかるため、速報はリストから取得
+        # (リストからは瞬時に取得できる)
+        tweets, all_info_dict = self.fetch_list_tweets(list_id=self.syaroho_list_id)
         return tweets, all_info_dict
 
     def fetch_list_member(self, list_id: str) -> Tuple[List[User], Dict[str, Any]]:
@@ -591,13 +621,13 @@ class TwitterV2(Twitter):
         return users, all_info_dict
 
     def fetch_member(self) -> Tuple[List[User], Dict[str, Any]]:
-        users, all_info_dict = self.fetch_list_member(list_id=SYAROHO_LIST_ID)
+        users, all_info_dict = self.fetch_list_member(list_id=self.syaroho_list_id)
         return users, all_info_dict
 
     def add_members_to_list(self, users: List[User]) -> None:
         for u in users:
             self.client.add_list_member(
-                id=SYAROHO_LIST_ID,
+                id=self.syaroho_list_id,
                 user_id=u.id,
             )
 
@@ -667,7 +697,7 @@ class ReplyStreaming(tweepy.StreamingClient):
         rating_summary: pd.DataFrame,
         twitter: TwitterV2,
     ):
-        super(ReplyStreaming, self).__init__(BEARER_TOKEN)
+        super(ReplyStreaming, self).__init__(self.bearer_token)
         self.rating_info = rating_info
         self.rating_summary = rating_summary.reset_index().set_index("User")
         self.twitter = twitter
@@ -693,7 +723,7 @@ class ReplyStreaming(tweepy.StreamingClient):
 
 class SyarohoStreaming(tweepy.StreamingClient):
     def __init__(self) -> None:
-        super(SyarohoStreaming, self).__init__(BEARER_TOKEN)
+        super(SyarohoStreaming, self).__init__(self.bearer_token)
         # for syaroho
         self.tweets: List[Tweet] = []
 

@@ -66,6 +66,10 @@ class S3IOBaseHandler(IOBaseHandler):
         self.s3 = boto3.client("s3")
         self.temp_dir.mkdir(exist_ok=True)
 
+        if S3_BUCKET_NAME is None:
+            raise ValueError("Please S3_BUCKET_NAME")
+        self.s3_bucket_name = S3_BUCKET_NAME
+
     @retry(
         wait=wait_exponential(multiplier=1, min=1, max=10), stop=stop_after_attempt(3)
     )
@@ -74,7 +78,7 @@ class S3IOBaseHandler(IOBaseHandler):
         with temp_path.open("w") as f:
             json.dump(dict_obj, f, indent=4, ensure_ascii=False, default=json_serial)
         with temp_path.open("rb") as f:
-            self.s3.upload_fileobj(f, S3_BUCKET_NAME, relative_path)
+            self.s3.upload_fileobj(f, self.s3_bucket_name, relative_path)
         temp_path.unlink(missing_ok=True)
         return
 
@@ -87,7 +91,7 @@ class S3IOBaseHandler(IOBaseHandler):
         temp_path = self.temp_dir / f"{uuid.uuid4()}.json"
         with temp_path.open("wb") as f:
             try:
-                self.s3.download_fileobj(S3_BUCKET_NAME, relative_path, f)
+                self.s3.download_fileobj(self.s3_bucket_name, relative_path, f)
             except ClientError as e:
                 raise FileNotFoundError(e)
         with temp_path.open() as f:
@@ -106,7 +110,7 @@ class S3IOBaseHandler(IOBaseHandler):
         # use paginator since list_object only returns maximum 1000 objects
         paginator = self.s3.get_paginator("list_objects")
         res_iterator = paginator.paginate(
-            Bucket=S3_BUCKET_NAME, Prefix=relative_path, MaxKeys=1000000
+            Bucket=self.s3_bucket_name, Prefix=relative_path, MaxKeys=1000000
         )
         obj_list = []
         for res in res_iterator:

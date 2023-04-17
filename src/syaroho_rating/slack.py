@@ -1,4 +1,4 @@
-from typing import Protocol
+from typing import Protocol, Optional
 
 from slackweb import Slack
 
@@ -37,10 +37,13 @@ class DummySlackNotifier(SlackNotifierProtocol):
 class SlackNotifier(SlackNotifierProtocol):
     def __init__(
         self,
-        url: str = SLACK_WEBHOOK_URL,
+        url: Optional[str] = SLACK_WEBHOOK_URL,
         username: str = "syaroho-rating",
         icon_emoji: str = ":gurusyaro:",
     ):
+        if url is None:
+            raise ValueError("Please set SLACK_WEBHOOK_URL")
+
         self.slack = Slack(url=url)
         self.username = username
         self.icon_emoji = icon_emoji

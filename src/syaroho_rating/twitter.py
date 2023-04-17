@@ -192,13 +192,8 @@ class TwitterV1(Twitter):
     def listen_and_reply(
         self, rating_infos: Dict[str, Any], summary_df: pd.DataFrame
     ) -> None:
-        stream = Listener(rating_infos, summary_df, self)
-        # 大量のリプに対処するため非同期で処理
-        stream.filter(track=["@" + ACCOUNT_NAME], threaded=True)
-
-        # 10分後にストリーミングを終了
-        time.sleep(dt.timedelta(minutes=10).total_seconds())
-        stream.disconnect()
+        # TODO: ストリーミングを使わない返信機能を実装
+        print("Streaming for API v1.1 is deprecated")
         return
 
     @retry(
@@ -702,6 +697,7 @@ class TwitterV2(Twitter):
 
         # リプとメンションを拾う
         query = f"to:{ACCOUNT_NAME} OR @{ACCOUNT_NAME}"
+        # TODO: 毎回 rule を add するのはよくないので要修正
         client.add_rules(tweepy.StreamRule(query))
         client.filter(
             expansions=EXPANSIONS,
@@ -748,6 +744,7 @@ class ReplyStreaming(tweepy.StreamingClient):
         self.replied_list: List[str] = []
 
     def on_response(self, response: tweepy.Response) -> None:
+        # TODO: レスポンスの中で rule に該当するものだけフィルタする処理が必要
         data = response.data
         users = response.includes["users"]
         tweet = Tweet.from_responses_v2(tweets=[data], users=users)

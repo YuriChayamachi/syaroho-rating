@@ -1,5 +1,7 @@
 import datetime as dt
+import pickle
 import time
+from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Protocol, Tuple, Union
 
 import pandas as pd
@@ -8,23 +10,36 @@ import tweepy
 from tenacity import retry, stop_after_attempt, wait_exponential
 from tweepy import Cursor, Stream
 from tweepy.models import Status
+from tweepy_authlib import CookieSessionUserHandler
 
-from syaroho_rating.consts import (ACCESS_TOKEN_KEY, ACCESS_TOKEN_SECRET,
-                                   ACCOUNT_NAME, BEARER_TOKEN, CONSUMER_KEY,
-                                   CONSUMER_SECRET, ENVIRONMENT_NAME,
-                                   LIST_SLUG, SYAROHO_LIST_ID, invalid_clients,
-                                   reply_patience)
+from syaroho_rating.consts import (
+    ACCESS_TOKEN_KEY,
+    ACCESS_TOKEN_SECRET,
+    ACCOUNT_NAME,
+    BEARER_TOKEN,
+    CONSUMER_KEY,
+    CONSUMER_SECRET,
+    ENVIRONMENT_NAME,
+    LIST_SLUG,
+    SYAROHO_LIST_ID,
+    TWITTER_COOKIE_PATH,
+    TWITTER_PASSWORD,
+    invalid_clients,
+    reply_patience,
+)
 from syaroho_rating.message import create_reply_message
 from syaroho_rating.model import Tweet, User
-from syaroho_rating.utils import tweetid_to_datetime
+from syaroho_rating.utils import datetime_to_tweetid, tweetid_to_datetime
 from syaroho_rating.visualize.graph import GraphMaker
 
 
-def get_twitter(version: int) -> "Twitter":
-    if version == 1:
+def get_twitter(version: str) -> "Twitter":
+    if version == "1":
         return TwitterV1()
-    elif version == 2:
+    elif version == "2":
         return TwitterV2()
+    elif version == "1C":
+        return TwitterV1C()
     else:
         raise ValueError(f"Unsupported version: {version}.")
 
@@ -37,7 +52,9 @@ RawInfo = Union[List[Dict[str, Any]], Dict[str, Any]]
 
 
 class Twitter(Protocol):
-    def fetch_result(self, date: pendulum.DateTime) -> Tuple[List[Tweet], RawInfo]:
+    def fetch_result(
+        self, date: pendulum.DateTime
+    ) -> Tuple[List[Tweet], RawInfo]:
         ...
 
     def fetch_result_dq(self) -> Tuple[List[Tweet], RawInfo]:
@@ -76,10 +93,19 @@ class TwitterV1(Twitter):
     ) -> None:
         auth = tweepy.OAuthHandler(consumer_key, consumer_secret)
         auth.set_access_token(access_token_key, access_token_secret)
-        self.__api = tweepy.API(auth)
+        self.api = tweepy.API(auth)
+
+        if ENVIRONMENT_NAME is None:
+            raise ValueError("Please set ENVIRONMENT_NAME")
+        self.environment_name = ENVIRONMENT_NAME
+
+        if LIST_SLUG is None:
+            raise ValueError("Please set LIST_SLUG")
+        self.list_slug = LIST_SLUG
 
     @retry(
-        wait=wait_exponential(multiplier=1, min=1, max=60), stop=stop_after_attempt(3)
+        wait=wait_exponential(multiplier=1, min=1, max=60),
+        stop=stop_after_attempt(3),
     )
     def fetch_result(
         self, date: pendulum.DateTime
@@ -90,8 +116,8 @@ class TwitterV1(Twitter):
         raw_response = [
             x._json
             for x in Cursor(
-                self.__api.search_30_day,
-                label=ENVIRONMENT_NAME,
+                self.api.search_30_day,
+                label=self.environment_name,
                 query="しゃろほー",
                 fromDate=from_date.in_tz("utc").strftime("%Y%m%d%H%M"),
                 toDate=to_date.in_tz("utc").strftime("%Y%m%d%H%M"),
@@ -101,15 +127,18 @@ class TwitterV1(Twitter):
         return tweets, raw_response
 
     @retry(
-        wait=wait_exponential(multiplier=1, min=1, max=60), stop=stop_after_attempt(3)
+        wait=wait_exponential(multiplier=1, min=1, max=60),
+        stop=stop_after_attempt(3),
     )
     def fetch_result_dq(self) -> Tuple[List[Tweet], List[Dict[str, Any]]]:
+        # tweet されてから search API で拾えるようになるまでに時間がかかるため、速報はリストから取得
+        # (リストからは瞬時に取得できる)
         raw_response = [
             x._json
             for x in Cursor(
-                self.__api.list_timeline,
+                self.api.list_timeline,
                 owner_screen_name=ACCOUNT_NAME,
-                slug=LIST_SLUG,
+                slug=self.list_slug,
                 include_rts=False,
             ).items(1000)
         ]
@@ -117,68 +146,70 @@ class TwitterV1(Twitter):
         return tweets, raw_response
 
     @retry(
-        wait=wait_exponential(multiplier=1, min=1, max=60), stop=stop_after_attempt(3)
+        wait=wait_exponential(multiplier=1, min=1, max=60),
+        stop=stop_after_attempt(3),
     )
     def fetch_member(self) -> Tuple[List[User], List[Dict[str, Any]]]:
         raw_response = [
             x._json
             for x in Cursor(
-                self.__api.get_list_members,
+                self.api.get_list_members,
                 owner_screen_name=ACCOUNT_NAME,
-                slug=LIST_SLUG,
+                slug=self.list_slug,
             ).items(1000)
         ]
         users = User.from_responses_v1(raw_response)
         return users, raw_response
 
     @retry(
-        wait=wait_exponential(multiplier=1, min=1, max=60), stop=stop_after_attempt(3)
+        wait=wait_exponential(multiplier=1, min=1, max=60),
+        stop=stop_after_attempt(3),
     )
     def add_members_to_list(self, users: List[User]) -> None:
         screen_names = [u.username for u in users]
-        self.__api.add_list_members(
-            screen_name=screen_names, slug=LIST_SLUG, owner_screen_name=ACCOUNT_NAME
+        self.api.add_list_members(
+            screen_name=screen_names,
+            slug=self.list_slug,
+            owner_screen_name=ACCOUNT_NAME,
         )
         return
 
     @retry(
-        wait=wait_exponential(multiplier=1, min=1, max=60), stop=stop_after_attempt(3)
+        wait=wait_exponential(multiplier=1, min=1, max=60),
+        stop=stop_after_attempt(3),
     )
     def post_with_multiple_media(
         self, message: str, media_list: List[str], **kwargs: Any
     ) -> None:
         media_ids = []
         for media in media_list:
-            res = self.__api.media_upload(media)
+            res = self.api.media_upload(media)
             media_ids.append(res.media_id)
 
-        self.__api.update_status(status=message, media_ids=media_ids, **kwargs)
+        self.api.update_status(status=message, media_ids=media_ids, **kwargs)
         return
 
     def listen_and_reply(
         self, rating_infos: Dict[str, Any], summary_df: pd.DataFrame
     ) -> None:
-        stream = Listener(rating_infos, summary_df, self)
-        # 大量のリプに対処するため非同期で処理
-        stream.filter(track=["@" + ACCOUNT_NAME], threaded=True)
-
-        # 10分後にストリーミングを終了
-        time.sleep(dt.timedelta(minutes=10).total_seconds())
-        stream.disconnect()
+        # TODO: ストリーミングを使わない返信機能を実装
+        print("Streaming for API v1.1 is deprecated")
         return
 
     @retry(
-        wait=wait_exponential(multiplier=1, min=1, max=60), stop=stop_after_attempt(3)
+        wait=wait_exponential(multiplier=1, min=1, max=60),
+        stop=stop_after_attempt(3),
     )
     def retweet(self, tweet_id: str) -> None:
-        self.__api.retweet(tweet_id)
+        self.api.retweet(tweet_id)
         return
 
     @retry(
-        wait=wait_exponential(multiplier=1, min=1, max=60), stop=stop_after_attempt(3)
+        wait=wait_exponential(multiplier=1, min=1, max=60),
+        stop=stop_after_attempt(3),
     )
     def update_status(self, message: str) -> None:
-        self.__api.update_status(message)
+        self.api.update_status(message)
         return
 
 
@@ -275,6 +306,77 @@ class Listener(Stream):
         )
 
 
+class TwitterV1C(TwitterV1, Twitter):
+    def __init__(self) -> None:
+        if TWITTER_PASSWORD is None:
+            raise ValueError("Please set TWITTER_PASSWORD")
+
+        if Path(TWITTER_COOKIE_PATH).exists():
+            with open(TWITTER_COOKIE_PATH, "rb") as f:
+                cookies = pickle.load(f)
+            auth = CookieSessionUserHandler(cookies=cookies)
+        else:
+            auth = CookieSessionUserHandler(
+                screen_name=ACCOUNT_NAME, password=TWITTER_PASSWORD
+            )
+            cookies = auth.get_cookies()
+            with open(TWITTER_COOKIE_PATH, "wb") as f:
+                pickle.dump(cookies, f)
+
+        self.api = tweepy.API(auth)
+
+        if ENVIRONMENT_NAME is None:
+            raise ValueError("Please set ENVIRONMENT_NAME")
+        self.environment_name = ENVIRONMENT_NAME
+
+        if LIST_SLUG is None:
+            raise ValueError("Please set LIST_SLUG")
+        self.list_slug = LIST_SLUG
+
+    @retry(
+        wait=wait_exponential(multiplier=1, min=1, max=60),
+        stop=stop_after_attempt(3),
+    )
+    def fetch_result(
+        self, date: pendulum.DateTime
+    ) -> Tuple[List[Tweet], List[Dict[str, Any]]]:
+        target_date = pendulum.instance(date, "Asia/Tokyo")
+        from_date = target_date.subtract(minutes=1)
+        to_date = target_date.add(minutes=1)
+        raw_response = [
+            x._json
+            for x in Cursor(
+                self.api.search_tweets,
+                q="しゃろほー",
+                since_id=datetime_to_tweetid(from_date),
+                max_id=datetime_to_tweetid(to_date),
+            ).items(500)
+        ]
+        tweets = Tweet.from_responses_v1(raw_response)
+        return tweets, raw_response
+
+    @retry(
+        wait=wait_exponential(multiplier=1, min=1, max=60),
+        stop=stop_after_attempt(3),
+    )
+    def post_with_multiple_media(
+        self, message: str, media_list: List[str], **kwargs: Any
+    ) -> None:
+        media_ids = []
+        for media in media_list:
+            res = self.api.media_upload(media)
+            media_ids.append(res.media_id)
+
+        self.api.update_status(status=message, media_ids=media_ids, **kwargs)
+        return
+
+    def listen_and_reply(
+        self, rating_infos: Dict[str, Any], summary_df: pd.DataFrame
+    ) -> None:
+        print("Streaming is not available")
+        pass
+
+
 EXPANSIONS = [
     "attachments.poll_ids",
     "attachments.media_keys",
@@ -311,7 +413,13 @@ PLACE_FIELDS = [
     "name",
     "place_type",
 ]
-POLL_FIELDS = ["duration_minutes", "end_datetime", "id", "options", "voting_status"]
+POLL_FIELDS = [
+    "duration_minutes",
+    "end_datetime",
+    "id",
+    "options",
+    "voting_status",
+]
 TWEET_FIELDS = [
     "attachments",
     "author_id",
@@ -380,6 +488,14 @@ class TwitterV2(Twitter):
             access_token_secret=ACCESS_TOKEN_SECRET,
         )
 
+        if BEARER_TOKEN is None:
+            raise ValueError("Please set TWITTER_BEARER_TOKEN")
+        self.bearer_token = BEARER_TOKEN
+
+        if SYAROHO_LIST_ID is None:
+            raise ValueError("Please set SYAROHO_LIST_ID")
+        self.syaroho_list_id = SYAROHO_LIST_ID
+
     def update_status(self, message: str) -> None:
         self.client.create_tweet(text=message)
         return
@@ -424,7 +540,9 @@ class TwitterV2(Twitter):
             users += response.includes.get("users", [])
 
         tweet_objects = Tweet.from_responses_v2(tweets=data, users=users)
-        all_info_dict = self.resp_to_dict(data, medias, places, polls, tweets, users)
+        all_info_dict = self.resp_to_dict(
+            data, medias, places, polls, tweets, users
+        )
         return tweet_objects, all_info_dict
 
     @staticmethod
@@ -467,7 +585,9 @@ class TwitterV2(Twitter):
         )
         return tweets, all_info_dict
 
-    def fetch_list_tweets(self, list_id: str) -> Tuple[List[Tweet], Dict[str, Any]]:
+    def fetch_list_tweets(
+        self, list_id: str
+    ) -> Tuple[List[Tweet], Dict[str, Any]]:
         data: List[tweepy.Tweet] = []
         medias: List[tweepy.Media] = []
         places: List[tweepy.Place] = []
@@ -496,14 +616,22 @@ class TwitterV2(Twitter):
             users += response.includes.get("users", [])
 
         tweet_objects = Tweet.from_responses_v2(tweets=data, users=users)
-        all_info_dict = self.resp_to_dict(data, medias, places, polls, tweets, users)
+        all_info_dict = self.resp_to_dict(
+            data, medias, places, polls, tweets, users
+        )
         return tweet_objects, all_info_dict
 
     def fetch_result_dq(self) -> Tuple[List[Tweet], Dict[str, Any]]:
-        tweets, all_info_dict = self.fetch_list_tweets(list_id=SYAROHO_LIST_ID)
+        # tweet されてから search API で拾えるようになるまでに時間がかかるため、速報はリストから取得
+        # (リストからは瞬時に取得できる)
+        tweets, all_info_dict = self.fetch_list_tweets(
+            list_id=self.syaroho_list_id
+        )
         return tweets, all_info_dict
 
-    def fetch_list_member(self, list_id: str) -> Tuple[List[User], Dict[str, Any]]:
+    def fetch_list_member(
+        self, list_id: str
+    ) -> Tuple[List[User], Dict[str, Any]]:
         data: List[tweepy.User] = []
         tweets: List[tweepy.Tweet] = []
         for response in tweepy.Paginator(
@@ -520,18 +648,25 @@ class TwitterV2(Twitter):
             tweets += response.includes.get("tweets", [])
         users = User.from_responses_v2(users=data)
         all_info_dict = self.resp_to_dict(
-            data=data, medias=None, places=None, polls=None, tweets=tweets, users=None
+            data=data,
+            medias=None,
+            places=None,
+            polls=None,
+            tweets=tweets,
+            users=None,
         )
         return users, all_info_dict
 
     def fetch_member(self) -> Tuple[List[User], Dict[str, Any]]:
-        users, all_info_dict = self.fetch_list_member(list_id=SYAROHO_LIST_ID)
+        users, all_info_dict = self.fetch_list_member(
+            list_id=self.syaroho_list_id
+        )
         return users, all_info_dict
 
     def add_members_to_list(self, users: List[User]) -> None:
         for u in users:
             self.client.add_list_member(
-                id=SYAROHO_LIST_ID,
+                id=self.syaroho_list_id,
                 user_id=u.id,
             )
 
@@ -562,6 +697,7 @@ class TwitterV2(Twitter):
 
         # リプとメンションを拾う
         query = f"to:{ACCOUNT_NAME} OR @{ACCOUNT_NAME}"
+        # TODO: 毎回 rule を add するのはよくないので要修正
         client.add_rules(tweepy.StreamRule(query))
         client.filter(
             expansions=EXPANSIONS,
@@ -601,13 +737,14 @@ class ReplyStreaming(tweepy.StreamingClient):
         rating_summary: pd.DataFrame,
         twitter: TwitterV2,
     ):
-        super(ReplyStreaming, self).__init__(BEARER_TOKEN)
+        super(ReplyStreaming, self).__init__(self.bearer_token)
         self.rating_info = rating_info
         self.rating_summary = rating_summary.reset_index().set_index("User")
         self.twitter = twitter
         self.replied_list: List[str] = []
 
     def on_response(self, response: tweepy.Response) -> None:
+        # TODO: レスポンスの中で rule に該当するものだけフィルタする処理が必要
         data = response.data
         users = response.includes["users"]
         tweet = Tweet.from_responses_v2(tweets=[data], users=users)
@@ -627,7 +764,7 @@ class ReplyStreaming(tweepy.StreamingClient):
 
 class SyarohoStreaming(tweepy.StreamingClient):
     def __init__(self) -> None:
-        super(SyarohoStreaming, self).__init__(BEARER_TOKEN)
+        super(SyarohoStreaming, self).__init__(self.bearer_token)
         # for syaroho
         self.tweets: List[Tweet] = []
 

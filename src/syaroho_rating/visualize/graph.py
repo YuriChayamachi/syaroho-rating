@@ -38,9 +38,14 @@ class GraphMaker(object):
         self._draw_graph_and_save(ratings, attend_dates, user_name, save_path)
         return
 
-    def _draw_graph_and_save(self, rate_hist, attend_dates, user_name, save_path):
+    def _draw_graph_and_save(
+        self, rate_hist, attend_dates, user_name, save_path
+    ):
         first_date, last_date = min(attend_dates), max(attend_dates)
-        lowest_rate, highest_rate, = (
+        (
+            lowest_rate,
+            highest_rate,
+        ) = (
             min(rate_hist),
             max(rate_hist),
         )
@@ -55,7 +60,9 @@ class GraphMaker(object):
         plt.yticks(ymarks)
 
         y_min = max(200, lowest_rate) - 200
-        y_max = max(500, highest_rate + max((highest_rate - lowest_rate) * 0.125, 200))
+        y_max = max(
+            500, highest_rate + max((highest_rate - lowest_rate) * 0.125, 200)
+        )
         plt.ylim(y_min, y_max)
 
         # set graph bg color
@@ -106,7 +113,9 @@ class GraphMaker(object):
             fontsize=10,
             arrowprops=arrowprops,
         )
-        plt.title(header1, loc="left", color=colors(rate_hist[-1]), fontproperties=fp)
+        plt.title(
+            header1, loc="left", color=colors(rate_hist[-1]), fontproperties=fp
+        )
         plt.title(header2, fontsize=12, loc="right")
 
         if month_delta >= 12:
@@ -121,7 +130,10 @@ class GraphMaker(object):
                     month_name[dt_.month - 1]
                     if (
                         ((dt_.month % 3) == 1)
-                        or ((dt_.month == x_min.month + 1) and (dt_.year == x_min.year))
+                        or (
+                            (dt_.month == x_min.month + 1)
+                            and (dt_.year == x_min.year)
+                        )
                     )
                     else ""
                 )
@@ -129,7 +141,10 @@ class GraphMaker(object):
                     (str(dt_.year)[2:4] + "'")
                     if (
                         (dt_.month == 1)
-                        or ((dt_.month == x_min.month + 1) and (dt_.year == x_min.year))
+                        or (
+                            (dt_.month == x_min.month + 1)
+                            and (dt_.year == x_min.year)
+                        )
                     )
                     else ""
                 )
@@ -148,7 +163,10 @@ class GraphMaker(object):
                     (str(dt_.year)[2:4] + "'")
                     if (
                         (dt_.month == 1)
-                        or ((dt_.month == x_min.month + 1) and (dt_.year == x_min.year))
+                        or (
+                            (dt_.month == x_min.month + 1)
+                            and (dt_.year == x_min.year)
+                        )
                     )
                     else ""
                 )
@@ -167,14 +185,20 @@ class GraphMaker(object):
                     dt_.day
                     if (
                         ((dt_.day - 1) % interval == 0)
-                        and ((dt_ + dt.timedelta(days=interval - 1)).month == dt_.month)
+                        and (
+                            (dt_ + dt.timedelta(days=interval - 1)).month
+                            == dt_.month
+                        )
                     )
                     else ""
                 )
                 month = (
                     month_name[dt_.month - 1]
                     if (
-                        ((dt_.day == 1) or ((dt_ - x_min).days <= (interval - 1)))
+                        (
+                            (dt_.day == 1)
+                            or ((dt_ - x_min).days <= (interval - 1))
+                        )
                         and (day != "")
                     )
                     else ""

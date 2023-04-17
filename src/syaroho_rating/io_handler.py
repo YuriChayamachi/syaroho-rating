@@ -7,14 +7,18 @@ from typing import Any, Dict, List, Protocol, Union
 import boto3
 import tweepy
 from botocore.exceptions import ClientError
-from tenacity import (retry, retry_if_not_exception_type, stop_after_attempt,
-                      wait_exponential)
+from tenacity import (
+    retry,
+    retry_if_not_exception_type,
+    stop_after_attempt,
+    wait_exponential,
+)
 
 from syaroho_rating.consts import S3_BUCKET_NAME, STORAGE
 from syaroho_rating.model import Tweet, User
 
 
-def get_io_handler(version: int) -> "IOHandler":
+def get_io_handler(twitter_api_version: str) -> "IOHandler":
     base_handler: IOBaseHandler
     if STORAGE == "s3":
         base_handler = S3IOBaseHandler()
@@ -23,12 +27,14 @@ def get_io_handler(version: int) -> "IOHandler":
     else:
         raise RuntimeError(f"Unexpected STORAGE variable: {STORAGE}")
 
-    if version == 1:
+    if twitter_api_version == "1":
         return IOHandlerV1(base_handler)
-    if version == 2:
+    if twitter_api_version == "2":
         return IOHandlerV2(base_handler)
+    if twitter_api_version == "1C":
+        return IOHandlerV1(base_handler)
     else:
-        raise RuntimeError(f"Unexpected version: {version}")
+        raise RuntimeError(f"Unexpected version: {twitter_api_version}")
 
 
 JsonObj = Union[List[Dict[str, Any]], Dict[str, Any]]
@@ -64,15 +70,22 @@ class S3IOBaseHandler(IOBaseHandler):
         self.s3 = boto3.client("s3")
         self.temp_dir.mkdir(exist_ok=True)
 
+        if S3_BUCKET_NAME is None:
+            raise ValueError("Please S3_BUCKET_NAME")
+        self.s3_bucket_name = S3_BUCKET_NAME
+
     @retry(
-        wait=wait_exponential(multiplier=1, min=1, max=10), stop=stop_after_attempt(3)
+        wait=wait_exponential(multiplier=1, min=1, max=10),
+        stop=stop_after_attempt(3),
     )
     def save_dict(self, dict_obj: JsonObj, relative_path: str) -> None:
         temp_path = self.temp_dir / f"{uuid.uuid4()}.json"
         with temp_path.open("w") as f:
-            json.dump(dict_obj, f, indent=4, ensure_ascii=False, default=json_serial)
+            json.dump(
+                dict_obj, f, indent=4, ensure_ascii=False, default=json_serial
+            )
         with temp_path.open("rb") as f:
-            self.s3.upload_fileobj(f, S3_BUCKET_NAME, relative_path)
+            self.s3.upload_fileobj(f, self.s3_bucket_name, relative_path)
         temp_path.unlink(missing_ok=True)
         return
 
@@ -85,7 +98,7 @@ class S3IOBaseHandler(IOBaseHandler):
         temp_path = self.temp_dir / f"{uuid.uuid4()}.json"
         with temp_path.open("wb") as f:
             try:
-                self.s3.download_fileobj(S3_BUCKET_NAME, relative_path, f)
+                self.s3.download_fileobj(self.s3_bucket_name, relative_path, f)
             except ClientError as e:
                 raise FileNotFoundError(e)
         with temp_path.open() as f:
@@ -97,14 +110,15 @@ class S3IOBaseHandler(IOBaseHandler):
         raise NotImplementedError
 
     @retry(
-        wait=wait_exponential(multiplier=1, min=1, max=10), stop=stop_after_attempt(3)
+        wait=wait_exponential(multiplier=1, min=1, max=10),
+        stop=stop_after_attempt(3),
     )
     def list_path(self, relative_path: str) -> List[Any]:
         """バケットルートからの相対パスのリストを返す"""
         # use paginator since list_object only returns maximum 1000 objects
         paginator = self.s3.get_paginator("list_objects")
         res_iterator = paginator.paginate(
-            Bucket=S3_BUCKET_NAME, Prefix=relative_path, MaxKeys=1000000
+            Bucket=self.s3_bucket_name, Prefix=relative_path, MaxKeys=1000000
         )
         obj_list = []
         for res in res_iterator:
@@ -122,7 +136,9 @@ class LocalIOBaseHandler(IOBaseHandler):
         file_path = self.base_path / relative_path
         file_path.parent.mkdir(parents=True, exist_ok=True)
         with file_path.open("w") as f:
-            json.dump(dict_obj, f, indent=4, ensure_ascii=False, default=json_serial)
+            json.dump(
+                dict_obj, f, indent=4, ensure_ascii=False, default=json_serial
+            )
         return
 
     def load_dict(self, relative_path: str) -> Any:
@@ -137,7 +153,9 @@ class LocalIOBaseHandler(IOBaseHandler):
     def list_path(self, relative_path: str) -> List[Any]:
         """base path からの相対パスのリストを返す"""
         dir_path = self.base_path / relative_path
-        obj_list = [str(p.relative_to(self.base_path)) for p in dir_path.iterdir()]
+        obj_list = [
+            str(p.relative_to(self.base_path)) for p in dir_path.iterdir()
+        ]
         return obj_list
 
 
@@ -167,7 +185,7 @@ class IOHandler(Protocol):
         ...
 
 
-class IOHandlerV1(object):
+class IOHandlerV1(IOHandler):
     def __init__(self, base_handler: IOBaseHandler) -> None:
         self.base_handler = base_handler
 
@@ -246,7 +264,7 @@ class IOHandlerV1(object):
         return
 
 
-class IOHandlerV2(object):
+class IOHandlerV2(IOHandler):
     def __init__(self, base_handler: IOBaseHandler) -> None:
         self.base_handler = base_handler
 

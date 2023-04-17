@@ -18,7 +18,6 @@ def calc_rating_for_date(
     rating_infos: Dict,
     exag: float,
 ) -> Tuple[List, Dict]:
-
     # ある日の参加者リストの作成
     daily_infos = []
     player_list = []
@@ -116,16 +115,18 @@ def calc_rating_for_date(
 
     for i in range(len(daily_infos)):
         # inner_rateの読み込み
-        daily_infos[i]["inner_rate"] = rating_infos[daily_infos[i]["screen_name"]][
-            "inner_rate"
-        ]
+        daily_infos[i]["inner_rate"] = rating_infos[
+            daily_infos[i]["screen_name"]
+        ]["inner_rate"]
         attend_time = len(rating_infos[daily_infos[i]["screen_name"]]["perf"])
         if attend_time == 0:
             daily_infos[i]["aperf"] = 1600
         else:
             weight = np.ones(attend_time) * 0.9
             weight = weight ** np.arange(attend_time, 0, -1)
-            perf_hist = np.array(rating_infos[daily_infos[i]["screen_name"]]["perf"])
+            perf_hist = np.array(
+                rating_infos[daily_infos[i]["screen_name"]]["perf"]
+            )
             daily_infos[i]["aperf"] = perf_hist @ weight / sum(weight)
 
         # 順位付け
@@ -185,7 +186,9 @@ def calc_rating_for_date(
 
     for i in range(len(daily_infos)):
         # inner_rateを更新
-        perf_lists = copy.deepcopy(rating_infos[daily_infos[i]["screen_name"]]["perf"])
+        perf_lists = copy.deepcopy(
+            rating_infos[daily_infos[i]["screen_name"]]["perf"]
+        )
         numer = 0.0
         denom = 0.0
 
@@ -217,7 +220,8 @@ def calc_rating_for_date(
 
         # リストのrateを更新
         delta = (
-            int(new_rate + 0.5) - rating_infos[daily_infos[i]["screen_name"]]["rate"]
+            int(new_rate + 0.5)
+            - rating_infos[daily_infos[i]["screen_name"]]["rate"]
         )
         delta_sig = "+" if delta >= 0 else "-"
         if rating_infos[daily_infos[i]["screen_name"]]["rate"] > 0:
@@ -228,7 +232,9 @@ def calc_rating_for_date(
         daily_infos[i]["change"] = delta_str
 
         # 辞書のrateを更新
-        rating_infos[daily_infos[i]["screen_name"]]["rate"] = int(new_rate + 0.5)
+        rating_infos[daily_infos[i]["screen_name"]]["rate"] = int(
+            new_rate + 0.5
+        )
         rating_infos[daily_infos[i]["screen_name"]]["rate_hist"].append(
             int(new_rate + 0.5)
         )
@@ -238,7 +244,9 @@ def calc_rating_for_date(
             int(new_rate + 0.5)
             >= rating_infos[daily_infos[i]["screen_name"]]["highest"]
         ):
-            rating_infos[daily_infos[i]["screen_name"]]["highest"] = int(new_rate + 0.5)
+            rating_infos[daily_infos[i]["screen_name"]]["highest"] = int(
+                new_rate + 0.5
+            )
 
     return daily_infos, rating_infos
 
@@ -257,7 +265,9 @@ def summarize_rating_info(rating_infos: Dict) -> pd.DataFrame:
             ]
         )
 
-    df = pd.DataFrame(final_lists, columns=["User", "Rating", "Match", "Win", "Best"])
+    df = pd.DataFrame(
+        final_lists, columns=["User", "Rating", "Match", "Win", "Best"]
+    )
     df = df.sort_values("Rating", ascending=False)
     df["Rank"] = (
         df["Rating"].rank(ascending=False, method="min").apply(lambda x: int(x))

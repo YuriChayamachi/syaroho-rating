@@ -20,7 +20,6 @@ def get_colorlist(performances: pd.Series, n_col: int) -> np.ndarray:
 
 
 class TableMaker(object):
-
     save_dir = Path("result_table")
 
     def __init__(self, data: pd.DataFrame, date: dt.date):
@@ -38,7 +37,12 @@ class TableMaker(object):
             figsize=((len(df_.columns) + 1) * 3, (len(df_) + 1) * 0.7)
         )
         fig.subplots_adjust(
-            left=0.15, bottom=0.025, right=0.95, top=0.95, wspace=0.15, hspace=0.15
+            left=0.15,
+            bottom=0.025,
+            right=0.95,
+            top=0.95,
+            wspace=0.15,
+            hspace=0.15,
         )
         ax.axis("off")
         colorlist = get_colorlist(df["Perf."], len(df.columns) - 1)

@@ -12,12 +12,21 @@ from tweepy import Cursor, Stream
 from tweepy.models import Status
 from tweepy_authlib import CookieSessionUserHandler
 
-from syaroho_rating.consts import (ACCESS_TOKEN_KEY, ACCESS_TOKEN_SECRET,
-                                   ACCOUNT_NAME, BEARER_TOKEN, CONSUMER_KEY,
-                                   CONSUMER_SECRET, ENVIRONMENT_NAME,
-                                   LIST_SLUG, SYAROHO_LIST_ID,
-                                   TWITTER_COOKIE_PATH, TWITTER_PASSWORD,
-                                   invalid_clients, reply_patience)
+from syaroho_rating.consts import (
+    ACCESS_TOKEN_KEY,
+    ACCESS_TOKEN_SECRET,
+    ACCOUNT_NAME,
+    BEARER_TOKEN,
+    CONSUMER_KEY,
+    CONSUMER_SECRET,
+    ENVIRONMENT_NAME,
+    LIST_SLUG,
+    SYAROHO_LIST_ID,
+    TWITTER_COOKIE_PATH,
+    TWITTER_PASSWORD,
+    invalid_clients,
+    reply_patience,
+)
 from syaroho_rating.message import create_reply_message
 from syaroho_rating.model import Tweet, User
 from syaroho_rating.utils import datetime_to_tweetid, tweetid_to_datetime
@@ -43,7 +52,9 @@ RawInfo = Union[List[Dict[str, Any]], Dict[str, Any]]
 
 
 class Twitter(Protocol):
-    def fetch_result(self, date: pendulum.DateTime) -> Tuple[List[Tweet], RawInfo]:
+    def fetch_result(
+        self, date: pendulum.DateTime
+    ) -> Tuple[List[Tweet], RawInfo]:
         ...
 
     def fetch_result_dq(self) -> Tuple[List[Tweet], RawInfo]:
@@ -93,7 +104,8 @@ class TwitterV1(Twitter):
         self.list_slug = LIST_SLUG
 
     @retry(
-        wait=wait_exponential(multiplier=1, min=1, max=60), stop=stop_after_attempt(3)
+        wait=wait_exponential(multiplier=1, min=1, max=60),
+        stop=stop_after_attempt(3),
     )
     def fetch_result(
         self, date: pendulum.DateTime
@@ -115,7 +127,8 @@ class TwitterV1(Twitter):
         return tweets, raw_response
 
     @retry(
-        wait=wait_exponential(multiplier=1, min=1, max=60), stop=stop_after_attempt(3)
+        wait=wait_exponential(multiplier=1, min=1, max=60),
+        stop=stop_after_attempt(3),
     )
     def fetch_result_dq(self) -> Tuple[List[Tweet], List[Dict[str, Any]]]:
         # tweet されてから search API で拾えるようになるまでに時間がかかるため、速報はリストから取得
@@ -133,7 +146,8 @@ class TwitterV1(Twitter):
         return tweets, raw_response
 
     @retry(
-        wait=wait_exponential(multiplier=1, min=1, max=60), stop=stop_after_attempt(3)
+        wait=wait_exponential(multiplier=1, min=1, max=60),
+        stop=stop_after_attempt(3),
     )
     def fetch_member(self) -> Tuple[List[User], List[Dict[str, Any]]]:
         raw_response = [
@@ -148,17 +162,21 @@ class TwitterV1(Twitter):
         return users, raw_response
 
     @retry(
-        wait=wait_exponential(multiplier=1, min=1, max=60), stop=stop_after_attempt(3)
+        wait=wait_exponential(multiplier=1, min=1, max=60),
+        stop=stop_after_attempt(3),
     )
     def add_members_to_list(self, users: List[User]) -> None:
         screen_names = [u.username for u in users]
         self.api.add_list_members(
-            screen_name=screen_names, slug=self.list_slug, owner_screen_name=ACCOUNT_NAME
+            screen_name=screen_names,
+            slug=self.list_slug,
+            owner_screen_name=ACCOUNT_NAME,
         )
         return
 
     @retry(
-        wait=wait_exponential(multiplier=1, min=1, max=60), stop=stop_after_attempt(3)
+        wait=wait_exponential(multiplier=1, min=1, max=60),
+        stop=stop_after_attempt(3),
     )
     def post_with_multiple_media(
         self, message: str, media_list: List[str], **kwargs: Any
@@ -184,14 +202,16 @@ class TwitterV1(Twitter):
         return
 
     @retry(
-        wait=wait_exponential(multiplier=1, min=1, max=60), stop=stop_after_attempt(3)
+        wait=wait_exponential(multiplier=1, min=1, max=60),
+        stop=stop_after_attempt(3),
     )
     def retweet(self, tweet_id: str) -> None:
         self.api.retweet(tweet_id)
         return
 
     @retry(
-        wait=wait_exponential(multiplier=1, min=1, max=60), stop=stop_after_attempt(3)
+        wait=wait_exponential(multiplier=1, min=1, max=60),
+        stop=stop_after_attempt(3),
     )
     def update_status(self, message: str) -> None:
         self.api.update_status(message)
@@ -319,7 +339,8 @@ class TwitterV1C(TwitterV1, Twitter):
         self.list_slug = LIST_SLUG
 
     @retry(
-        wait=wait_exponential(multiplier=1, min=1, max=60), stop=stop_after_attempt(3)
+        wait=wait_exponential(multiplier=1, min=1, max=60),
+        stop=stop_after_attempt(3),
     )
     def fetch_result(
         self, date: pendulum.DateTime
@@ -340,7 +361,8 @@ class TwitterV1C(TwitterV1, Twitter):
         return tweets, raw_response
 
     @retry(
-        wait=wait_exponential(multiplier=1, min=1, max=60), stop=stop_after_attempt(3)
+        wait=wait_exponential(multiplier=1, min=1, max=60),
+        stop=stop_after_attempt(3),
     )
     def post_with_multiple_media(
         self, message: str, media_list: List[str], **kwargs: Any
@@ -396,7 +418,13 @@ PLACE_FIELDS = [
     "name",
     "place_type",
 ]
-POLL_FIELDS = ["duration_minutes", "end_datetime", "id", "options", "voting_status"]
+POLL_FIELDS = [
+    "duration_minutes",
+    "end_datetime",
+    "id",
+    "options",
+    "voting_status",
+]
 TWEET_FIELDS = [
     "attachments",
     "author_id",
@@ -473,7 +501,6 @@ class TwitterV2(Twitter):
             raise ValueError("Please set SYAROHO_LIST_ID")
         self.syaroho_list_id = SYAROHO_LIST_ID
 
-
     def update_status(self, message: str) -> None:
         self.client.create_tweet(text=message)
         return
@@ -518,7 +545,9 @@ class TwitterV2(Twitter):
             users += response.includes.get("users", [])
 
         tweet_objects = Tweet.from_responses_v2(tweets=data, users=users)
-        all_info_dict = self.resp_to_dict(data, medias, places, polls, tweets, users)
+        all_info_dict = self.resp_to_dict(
+            data, medias, places, polls, tweets, users
+        )
         return tweet_objects, all_info_dict
 
     @staticmethod
@@ -561,7 +590,9 @@ class TwitterV2(Twitter):
         )
         return tweets, all_info_dict
 
-    def fetch_list_tweets(self, list_id: str) -> Tuple[List[Tweet], Dict[str, Any]]:
+    def fetch_list_tweets(
+        self, list_id: str
+    ) -> Tuple[List[Tweet], Dict[str, Any]]:
         data: List[tweepy.Tweet] = []
         medias: List[tweepy.Media] = []
         places: List[tweepy.Place] = []
@@ -590,16 +621,22 @@ class TwitterV2(Twitter):
             users += response.includes.get("users", [])
 
         tweet_objects = Tweet.from_responses_v2(tweets=data, users=users)
-        all_info_dict = self.resp_to_dict(data, medias, places, polls, tweets, users)
+        all_info_dict = self.resp_to_dict(
+            data, medias, places, polls, tweets, users
+        )
         return tweet_objects, all_info_dict
 
     def fetch_result_dq(self) -> Tuple[List[Tweet], Dict[str, Any]]:
         # tweet されてから search API で拾えるようになるまでに時間がかかるため、速報はリストから取得
         # (リストからは瞬時に取得できる)
-        tweets, all_info_dict = self.fetch_list_tweets(list_id=self.syaroho_list_id)
+        tweets, all_info_dict = self.fetch_list_tweets(
+            list_id=self.syaroho_list_id
+        )
         return tweets, all_info_dict
 
-    def fetch_list_member(self, list_id: str) -> Tuple[List[User], Dict[str, Any]]:
+    def fetch_list_member(
+        self, list_id: str
+    ) -> Tuple[List[User], Dict[str, Any]]:
         data: List[tweepy.User] = []
         tweets: List[tweepy.Tweet] = []
         for response in tweepy.Paginator(
@@ -616,12 +653,19 @@ class TwitterV2(Twitter):
             tweets += response.includes.get("tweets", [])
         users = User.from_responses_v2(users=data)
         all_info_dict = self.resp_to_dict(
-            data=data, medias=None, places=None, polls=None, tweets=tweets, users=None
+            data=data,
+            medias=None,
+            places=None,
+            polls=None,
+            tweets=tweets,
+            users=None,
         )
         return users, all_info_dict
 
     def fetch_member(self) -> Tuple[List[User], Dict[str, Any]]:
-        users, all_info_dict = self.fetch_list_member(list_id=self.syaroho_list_id)
+        users, all_info_dict = self.fetch_list_member(
+            list_id=self.syaroho_list_id
+        )
         return users, all_info_dict
 
     def add_members_to_list(self, users: List[User]) -> None:

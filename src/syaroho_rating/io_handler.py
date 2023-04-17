@@ -7,8 +7,12 @@ from typing import Any, Dict, List, Protocol, Union
 import boto3
 import tweepy
 from botocore.exceptions import ClientError
-from tenacity import (retry, retry_if_not_exception_type, stop_after_attempt,
-                      wait_exponential)
+from tenacity import (
+    retry,
+    retry_if_not_exception_type,
+    stop_after_attempt,
+    wait_exponential,
+)
 
 from syaroho_rating.consts import S3_BUCKET_NAME, STORAGE
 from syaroho_rating.model import Tweet, User
@@ -71,12 +75,15 @@ class S3IOBaseHandler(IOBaseHandler):
         self.s3_bucket_name = S3_BUCKET_NAME
 
     @retry(
-        wait=wait_exponential(multiplier=1, min=1, max=10), stop=stop_after_attempt(3)
+        wait=wait_exponential(multiplier=1, min=1, max=10),
+        stop=stop_after_attempt(3),
     )
     def save_dict(self, dict_obj: JsonObj, relative_path: str) -> None:
         temp_path = self.temp_dir / f"{uuid.uuid4()}.json"
         with temp_path.open("w") as f:
-            json.dump(dict_obj, f, indent=4, ensure_ascii=False, default=json_serial)
+            json.dump(
+                dict_obj, f, indent=4, ensure_ascii=False, default=json_serial
+            )
         with temp_path.open("rb") as f:
             self.s3.upload_fileobj(f, self.s3_bucket_name, relative_path)
         temp_path.unlink(missing_ok=True)
@@ -103,7 +110,8 @@ class S3IOBaseHandler(IOBaseHandler):
         raise NotImplementedError
 
     @retry(
-        wait=wait_exponential(multiplier=1, min=1, max=10), stop=stop_after_attempt(3)
+        wait=wait_exponential(multiplier=1, min=1, max=10),
+        stop=stop_after_attempt(3),
     )
     def list_path(self, relative_path: str) -> List[Any]:
         """バケットルートからの相対パスのリストを返す"""
@@ -128,7 +136,9 @@ class LocalIOBaseHandler(IOBaseHandler):
         file_path = self.base_path / relative_path
         file_path.parent.mkdir(parents=True, exist_ok=True)
         with file_path.open("w") as f:
-            json.dump(dict_obj, f, indent=4, ensure_ascii=False, default=json_serial)
+            json.dump(
+                dict_obj, f, indent=4, ensure_ascii=False, default=json_serial
+            )
         return
 
     def load_dict(self, relative_path: str) -> Any:
@@ -143,7 +153,9 @@ class LocalIOBaseHandler(IOBaseHandler):
     def list_path(self, relative_path: str) -> List[Any]:
         """base path からの相対パスのリストを返す"""
         dir_path = self.base_path / relative_path
-        obj_list = [str(p.relative_to(self.base_path)) for p in dir_path.iterdir()]
+        obj_list = [
+            str(p.relative_to(self.base_path)) for p in dir_path.iterdir()
+        ]
         return obj_list
 
 

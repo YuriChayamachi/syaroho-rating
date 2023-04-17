@@ -1,4 +1,4 @@
-from typing import Protocol, Optional
+from typing import Optional, Protocol
 
 from slackweb import Slack
 
@@ -55,7 +55,9 @@ class SlackNotifier(SlackNotifierProtocol):
             "text": text,
         }
         self.slack.notify(
-            attachments=[attachment], username=self.username, icon_emoji=self.icon_emoji
+            attachments=[attachment],
+            username=self.username,
+            icon_emoji=self.icon_emoji,
         )
         return
 
@@ -66,7 +68,9 @@ class SlackNotifier(SlackNotifierProtocol):
             "text": text,
         }
         self.slack.notify(
-            attachments=[attachment], username=self.username, icon_emoji=self.icon_emoji
+            attachments=[attachment],
+            username=self.username,
+            icon_emoji=self.icon_emoji,
         )
         return
 
@@ -77,6 +81,8 @@ class SlackNotifier(SlackNotifierProtocol):
             "text": text,
         }
         self.slack.notify(
-            attachments=[attachment], username=self.username, icon_emoji=self.icon_emoji
+            attachments=[attachment],
+            username=self.username,
+            icon_emoji=self.icon_emoji,
         )
         return

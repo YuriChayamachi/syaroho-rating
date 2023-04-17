@@ -19,7 +19,6 @@ def get_colorlist(performances: pd.Series, n_col: int) -> np.ndarray:
 
 
 class SummaryTableMaker(object):
-
     save_dir = Path("rating_summary_table")
     max_page = 4
     per_page = 25
@@ -39,15 +38,18 @@ class SummaryTableMaker(object):
     def make(self) -> List[Path]:
         filenames = []
         self.save_dir.mkdir(exist_ok=True)
-        num_pages = min(self.max_page, len(self.summary_df) // self.per_page + 1)
+        num_pages = min(
+            self.max_page, len(self.summary_df) // self.per_page + 1
+        )
         for i, c in enumerate(range(0, num_pages, self.per_page)):
             save_path = self.save_dir / f"{self.end_date.isoformat()}_{i}.png"
-            self._make_and_save(self.summary_df.iloc[c : c + self.per_page], save_path)
+            self._make_and_save(
+                self.summary_df.iloc[c : c + self.per_page], save_path
+            )
             filenames.append(save_path)
         return filenames
 
     def _make_and_save(self, df_w: pd.DataFrame, save_path: Path) -> None:
-
         # 表の背景色の設定
         colorlists = get_colorlist(df_w["Rating"], n_col=5)
 
@@ -56,7 +58,12 @@ class SummaryTableMaker(object):
             figsize=((len(df_w.columns) + 1) * 3, (len(df_w) + 1) * 0.7)
         )
         fig.subplots_adjust(
-            left=0.100, bottom=0.05, right=0.95, top=0.95, wspace=0.00, hspace=0.05
+            left=0.100,
+            bottom=0.05,
+            right=0.95,
+            top=0.95,
+            wspace=0.00,
+            hspace=0.05,
         )
         ax.axis("off")
         tbl = ax.table(

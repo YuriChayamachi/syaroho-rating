@@ -17,7 +17,9 @@ class User:
     protected: bool
 
     @staticmethod
-    def from_responses_v1(raw_response: Iterable[Dict[str, Any]]) -> List["User"]:
+    def from_responses_v1(
+        raw_response: Iterable[Dict[str, Any]]
+    ) -> List["User"]:
         return [
             User(
                 id=u["id"],
@@ -31,7 +33,9 @@ class User:
     @staticmethod
     def from_responses_v2(users: Iterable[tweepy.User]) -> List["User"]:
         return [
-            User(id=u.id, name=u.name, username=u.username, protected=u.protected)
+            User(
+                id=u.id, name=u.name, username=u.username, protected=u.protected
+            )
             for u in users
         ]
 
@@ -45,7 +49,9 @@ class Tweet:
     author: User
 
     @staticmethod
-    def from_responses_v1(raw_response: Iterable[Dict[str, Any]]) -> List["Tweet"]:
+    def from_responses_v1(
+        raw_response: Iterable[Dict[str, Any]]
+    ) -> List["Tweet"]:
         return [
             Tweet(
                 text=t["text"],
@@ -67,7 +73,9 @@ class Tweet:
     def from_responses_v2(
         tweets: Iterable[tweepy.Tweet], users: Iterable[tweepy.User]
     ) -> List["Tweet"]:
-        users_dict = {u.id: User(u.id, u.name, u.username, u.protected) for u in users}
+        users_dict = {
+            u.id: User(u.id, u.name, u.username, u.protected) for u in users
+        }
         return [
             Tweet(
                 text=t.text,

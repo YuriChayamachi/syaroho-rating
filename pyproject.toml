@@ -1,3 +1,13 @@
+[tool.black]
+target-version = ["py39"]
+line-length = 80
+
+[tool.isort]
+profile = "black"
+py_version = 39
+line_length = 80
+known_local_folder = ["syaroho_rating"]
+
 [tool.mypy]
 python_version = "3.9"
 no_strict_optional = true

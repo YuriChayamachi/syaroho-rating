@@ -8,17 +8,24 @@ from syaroho_rating.io_handler import IOHandler
 from syaroho_rating.model import Tweet, User
 from syaroho_rating.rating import calc_rating_for_date, summarize_rating_info
 from syaroho_rating.twitter import Twitter, is_valid_client
-from syaroho_rating.utils import (clean_html_tag, timedelta_to_ms,
-                                  tweetid_to_datetime)
+from syaroho_rating.utils import (
+    clean_html_tag,
+    timedelta_to_ms,
+    tweetid_to_datetime,
+)
 from syaroho_rating.visualize.graph import GraphMaker
 from syaroho_rating.visualize.table import TableMaker
 
 
-def filter_and_sort(statuses: List[Tweet], date: pendulum.DateTime) -> List[Dict]:
+def filter_and_sort(
+    statuses: List[Tweet], date: pendulum.DateTime
+) -> List[Dict]:
     # 参加者リストの作成
     participants = []
     for s in statuses:
-        if not ((s.text == "しゃろほー") and is_valid_client(clean_html_tag(s.source))):
+        if not (
+            (s.text == "しゃろほー") and is_valid_client(clean_html_tag(s.source))
+        ):
             continue
 
         rawtime = tweetid_to_datetime(s.id)
@@ -126,7 +133,9 @@ class Syaroho(object):
         try:
             print(f"Loading previous rating infos...")
             prev_rating_infos = self.io.get_rating_info(date.subtract(days=1))
-            print(f"Loaded previous rating containing {len(prev_rating_infos)} rows.")
+            print(
+                f"Loaded previous rating containing {len(prev_rating_infos)} rows."
+            )
         except FileNotFoundError:
             print("No prev rating info found. Use empty list instead.")
             prev_rating_infos = dict()
@@ -216,7 +225,9 @@ class Syaroho(object):
                 print(f"Retweet is not permissive for user {row.id}. Skip.")
         return
 
-    def reply_to_mentions(self, summary_df: pd.DataFrame, rating_infos: Dict) -> None:
+    def reply_to_mentions(
+        self, summary_df: pd.DataFrame, rating_infos: Dict
+    ) -> None:
         self.twitter.listen_and_reply(rating_infos, summary_df)
         return
 
@@ -229,7 +240,9 @@ class Syaroho(object):
         fetch_tweet: bool = False,
         exag_start: bool = False,
     ) -> None:
-        for i, date in enumerate(pendulum.period(start_date, end_date).range("days")):
+        for i, date in enumerate(
+            pendulum.period(start_date, end_date).range("days")
+        ):
             print(f"Executing backfill for {date}...")
             try:
                 dq_statuses = self.io.get_statuses_dq(date)
@@ -238,12 +251,21 @@ class Syaroho(object):
                 dq_statuses = []
                 pass
             if i == 0 and exag_start:
-                self.run(date, dq_statuses, fetch_tweet, do_post, do_retweet, exag=1.5)
+                self.run(
+                    date,
+                    dq_statuses,
+                    fetch_tweet,
+                    do_post,
+                    do_retweet,
+                    exag=1.5,
+                )
             else:
                 self.run(date, dq_statuses, fetch_tweet, do_post, do_retweet)
         print("done.")
 
-    def fetch_and_save_tweet(self, date: pendulum.DateTime, save: bool = False) -> None:
+    def fetch_and_save_tweet(
+        self, date: pendulum.DateTime, save: bool = False
+    ) -> None:
         _, raw_response = self.twitter.fetch_result(date)
         print(raw_response)
         if save:

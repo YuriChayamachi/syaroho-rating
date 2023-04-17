@@ -42,7 +42,9 @@ def perf_to_color(perf: Union[int, float]) -> np.ndarray:
 
 # timedeltaをミリ秒に変換する関数
 def timedelta_to_ms(delta: dt.timedelta) -> float:
-    ms = (delta.days * 86400 + delta.seconds) * 1000 + (delta.microseconds / 1000)
+    ms = (delta.days * 86400 + delta.seconds) * 1000 + (
+        delta.microseconds / 1000
+    )
     return ms
 
 
@@ -54,7 +56,9 @@ def tweetid_to_datetime(tweetid: str) -> pendulum.DateTime:
 
 
 def datetime_to_tweetid(datetime: pendulum.DateTime) -> str:
-    timedelta = datetime.in_timezone("UTC") - pendulum.datetime(1970, 1, 1, tz="UTC")
+    timedelta = datetime.in_timezone("UTC") - pendulum.datetime(
+        1970, 1, 1, tz="UTC"
+    )
     tweet_id = (timedelta.total_seconds() * 1000 - 1288834974657) * (2**22)
     return str(int(tweet_id))
 
@@ -68,5 +72,7 @@ def clean_html_tag(text: str) -> str:
 def parse_date_string(date_str: str) -> pendulum.DateTime:
     parsed_date = pendulum.parse(date_str, tz=TZ)
     if not isinstance(parsed_date, pendulum.DateTime):
-        raise RuntimeError(f"Failed parsing date string to DateTime: {date_str}")
+        raise RuntimeError(
+            f"Failed parsing date string to DateTime: {date_str}"
+        )
     return parsed_date

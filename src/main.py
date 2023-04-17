@@ -3,8 +3,14 @@ import time
 import click
 import pendulum
 
-from syaroho_rating.consts import (DEBUG, DO_POST, DO_RETWEET, SLACK_NOTIFY,
-                                   TWITTER_API_VERSION, TZ)
+from syaroho_rating.consts import (
+    DEBUG,
+    DO_POST,
+    DO_RETWEET,
+    SLACK_NOTIFY,
+    TWITTER_API_VERSION,
+    TZ,
+)
 from syaroho_rating.io_handler import get_io_handler
 from syaroho_rating.slack import get_slack_notifier
 from syaroho_rating.syaroho import Syaroho
@@ -52,7 +58,11 @@ def run() -> None:
         # observe
         print(">>>>> observe")
         summary_df, rating_infos = syaroho.run(
-            today, dq_statuses, fetch_tweet=True, do_post=DO_POST, do_retweet=DO_RETWEET
+            today,
+            dq_statuses,
+            fetch_tweet=True,
+            do_post=DO_POST,
+            do_retweet=DO_RETWEET,
         )
 
         # reply to mentions(10分間実行)
@@ -78,7 +88,12 @@ def run() -> None:
 @click.option("--post", is_flag=True, type=bool)
 @click.option("--retweet", is_flag=True, type=bool)
 def backfill(
-    start: str, end: str, eg_start: bool, fetch_tweet: bool, post: bool, retweet: bool
+    start: str,
+    end: str,
+    eg_start: bool,
+    fetch_tweet: bool,
+    post: bool,
+    retweet: bool,
 ) -> None:
     start_date = parse_date_string(start)
     end_date = parse_date_string(end)

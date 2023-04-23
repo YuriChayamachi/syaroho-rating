@@ -114,9 +114,3 @@ month_name = [
     "Nov",
     "Dec",
 ]
-
-invalid_clients = [
-    "twittbot.net",
-    "IFTTT",
-    "Botbird tweets",
-]

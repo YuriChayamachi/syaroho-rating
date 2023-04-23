@@ -24,7 +24,6 @@ from syaroho_rating.consts import (
     SYAROHO_LIST_ID,
     TWITTER_COOKIE_PATH,
     TWITTER_PASSWORD,
-    invalid_clients,
     reply_patience,
 )
 from syaroho_rating.message import create_reply_message
@@ -42,10 +41,6 @@ def get_twitter(version: str) -> "Twitter":
         return TwitterV1C()
     else:
         raise ValueError(f"Unsupported version: {version}.")
-
-
-def is_valid_client(client: Optional[str]) -> bool:
-    return client is None or client not in invalid_clients
 
 
 RawInfo = Union[List[Dict[str, Any]], Dict[str, Any]]
@@ -595,7 +590,7 @@ class TwitterV2(Twitter):
         tweets: List[tweepy.Tweet] = []
         users: List[tweepy.User] = []
 
-        for response in tweepy.Paginator(
+        paginator = tweepy.Paginator(
             self.client.get_list_tweets,
             id=list_id,
             user_auth=True,
@@ -607,13 +602,15 @@ class TwitterV2(Twitter):
             tweet_fields=TWEET_FIELDS,
             user_fields=USER_FIELDS,
             limit=5,
-        ):
-            data += response.data
-            medias += response.includes.get("medias", [])
-            places += response.includes.get("places", [])
-            polls += response.includes.get("polls", [])
-            tweets += response.includes.get("tweets", [])
-            users += response.includes.get("users", [])
+        )
+        if paginator is not None:
+            for response in paginator:
+                data += response.data
+                medias += response.includes.get("medias", [])
+                places += response.includes.get("places", [])
+                polls += response.includes.get("polls", [])
+                tweets += response.includes.get("tweets", [])
+                users += response.includes.get("users", [])
 
         tweet_objects = Tweet.from_responses_v2(tweets=data, users=users)
         all_info_dict = self.resp_to_dict(

@@ -7,7 +7,6 @@ import pandas as pd
 import pendulum
 
 from syaroho_rating.model import Tweet
-from syaroho_rating.twitter import is_valid_client
 from syaroho_rating.utils import clean_html_tag, timedelta_to_ms
 
 
@@ -26,7 +25,7 @@ def calc_rating_for_date(
 
     for s in statuses:
         user_name = s.author.username
-        if (s.text == "しゃろほー") and is_valid_client(s.source):
+        if s.text == "しゃろほー":
             rawtime = s.created_at_ms
             time = rawtime.strftime("%H:%M:%S.%f")[:-3]
 
@@ -70,7 +69,7 @@ def calc_rating_for_date(
     # ツイ消しを見た場合
     for s in dq_statuses:
         user_name = s.author.username
-        if (s.text == "しゃろほー") and is_valid_client(clean_html_tag(s.source)):
+        if s.text == "しゃろほー":
             rawtime = s.created_at_ms
             time = rawtime.strftime("%H:%M:%S.%f")[:-3]
 

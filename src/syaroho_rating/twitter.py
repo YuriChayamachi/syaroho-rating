@@ -8,15 +8,13 @@ import pandas as pd
 import pendulum
 import tweepy
 from tenacity import retry, stop_after_attempt, wait_exponential
-from tweepy import Cursor, Stream
-from tweepy.models import Status
+from tweepy import Cursor
 from tweepy_authlib import CookieSessionUserHandler
 
 from syaroho_rating.consts import (
     ACCESS_TOKEN_KEY,
     ACCESS_TOKEN_SECRET,
     ACCOUNT_NAME,
-    BEARER_TOKEN,
     CONSUMER_KEY,
     CONSUMER_SECRET,
     ENVIRONMENT_NAME,
@@ -24,6 +22,7 @@ from syaroho_rating.consts import (
     SYAROHO_LIST_ID,
     TWITTER_COOKIE_PATH,
     TWITTER_PASSWORD,
+    TZ,
     reply_patience,
 )
 from syaroho_rating.message import create_reply_message
@@ -268,39 +267,6 @@ def handle_reply(
     return
 
 
-class Listener(Stream):
-    def __init__(
-        self,
-        rating_info: Dict[str, Any],
-        rating_summary: pd.DataFrame,
-        twitter: TwitterV1,
-    ) -> None:
-        super().__init__(
-            consumer_key=CONSUMER_KEY,
-            consumer_secret=CONSUMER_SECRET,
-            access_token=ACCESS_TOKEN_KEY,
-            access_token_secret=ACCESS_TOKEN_SECRET,
-        )
-        self.rating_info = rating_info
-        self.rating_summary = rating_summary.reset_index().set_index("User")
-        self.twitter = twitter
-        self.replied_list: List[str] = []
-
-    def on_status(self, status: Status) -> None:
-        tweet = Tweet.from_responses_v1([status._json])
-
-        if not tweet:
-            return
-
-        handle_reply(
-            tweet=tweet[0],
-            replied_list=self.replied_list,
-            rating_info=self.rating_info,
-            rating_summary=self.rating_summary,
-            twitter=self.twitter,
-        )
-
-
 class TwitterV1C(TwitterV1, Twitter):
     def __init__(self) -> None:
         if TWITTER_PASSWORD is None:
@@ -483,10 +449,6 @@ class TwitterV2(Twitter):
             access_token_secret=ACCESS_TOKEN_SECRET,
         )
 
-        if BEARER_TOKEN is None:
-            raise ValueError("Please set TWITTER_BEARER_TOKEN")
-        self.bearer_token = BEARER_TOKEN
-
         if SYAROHO_LIST_ID is None:
             raise ValueError("Please set SYAROHO_LIST_ID")
         self.syaroho_list_id = SYAROHO_LIST_ID
@@ -527,6 +489,8 @@ class TwitterV2(Twitter):
             end_time=end_time,
             limit=5,
         ):
+            if response.data is None:
+                continue
             data += response.data
             medias += response.includes.get("medias", [])
             places += response.includes.get("places", [])
@@ -590,7 +554,7 @@ class TwitterV2(Twitter):
         tweets: List[tweepy.Tweet] = []
         users: List[tweepy.User] = []
 
-        paginator = tweepy.Paginator(
+        for response in tweepy.Paginator(
             self.client.get_list_tweets,
             id=list_id,
             user_auth=True,
@@ -602,15 +566,15 @@ class TwitterV2(Twitter):
             tweet_fields=TWEET_FIELDS,
             user_fields=USER_FIELDS,
             limit=5,
-        )
-        if paginator is not None:
-            for response in paginator:
-                data += response.data
-                medias += response.includes.get("medias", [])
-                places += response.includes.get("places", [])
-                polls += response.includes.get("polls", [])
-                tweets += response.includes.get("tweets", [])
-                users += response.includes.get("users", [])
+        ):
+            if response.data is None:
+                continue
+            data += response.data
+            medias += response.includes.get("medias", [])
+            places += response.includes.get("places", [])
+            polls += response.includes.get("polls", [])
+            tweets += response.includes.get("tweets", [])
+            users += response.includes.get("users", [])
 
         tweet_objects = Tweet.from_responses_v2(tweets=data, users=users)
         all_info_dict = self.resp_to_dict(
@@ -686,113 +650,33 @@ class TwitterV2(Twitter):
     def listen_and_reply(
         self, rating_infos: Dict[str, Any], summary_df: pd.DataFrame
     ) -> None:
-        client = ReplyStreaming(
-            rating_info=rating_infos,
-            rating_summary=summary_df,
-            twitter=self,
-        )
-
-        # リプとメンションを拾う
+        replied_list: List[str] = []
+        target_date = pendulum.now(tz=TZ)
         query = f"to:{ACCOUNT_NAME} OR @{ACCOUNT_NAME}"
-        # TODO: 毎回 rule を add するのはよくないので要修正
-        client.add_rules(tweepy.StreamRule(query))
-        client.filter(
-            expansions=EXPANSIONS,
-            media_fields=MEDIA_FIELDS,
-            place_fields=PLACE_FIELDS,
-            poll_fields=POLL_FIELDS,
-            tweet_fields=TWEET_FIELDS,
-            user_fields=USER_FIELDS,
-            threaded=True,
-        )
 
-        # 10分後にストリーミングを終了
-        time.sleep(dt.timedelta(minutes=10).total_seconds())
-        self.close_stream(client)
+        rating_summary = summary_df.reset_index().set_index("User")
 
-    def listen_to_syaroho(self) -> tweepy.StreamingClient:
-        client = SyarohoStreaming()
-        query = ""
-        client.add_rules(tweepy.StreamRule(query))
+        interval = 20  # s
+        lag = 12  # s  (ツイート検索に end_time を指定する時は10秒以上前でないとエラーになる)
+        start_t = time.time()
+        while time.time() - start_t < dt.timedelta(minutes=10).total_seconds():
+            sec_elapse = round(time.time() - start_t)
+            start_time = target_date.add(
+                seconds=sec_elapse - lag - interval - 1
+            )  # 1秒間重複してもれなく検索
+            end_time = target_date.add(seconds=sec_elapse - lag)
+            tweets, all_info_dict = self.fetch_tweets(
+                query=query,
+                start_time=start_time,
+                end_time=end_time,
+            )
+            for tweet in tweets:
+                handle_reply(
+                    tweet=tweet,
+                    replied_list=replied_list,
+                    rating_info=rating_infos,
+                    rating_summary=rating_summary,
+                    twitter=self,
+                )
 
-        client.filter(
-            expansions=EXPANSIONS,
-            media_fields=MEDIA_FIELDS,
-            place_fields=PLACE_FIELDS,
-            poll_fields=POLL_FIELDS,
-            tweet_fields=TWEET_FIELDS,
-            user_fields=USER_FIELDS,
-            threaded=True,
-        )
-        return client
-
-
-class ReplyStreaming(tweepy.StreamingClient):
-    def __init__(
-        self,
-        rating_info: Dict[str, Any],
-        rating_summary: pd.DataFrame,
-        twitter: TwitterV2,
-    ):
-        super(ReplyStreaming, self).__init__(self.bearer_token)
-        self.rating_info = rating_info
-        self.rating_summary = rating_summary.reset_index().set_index("User")
-        self.twitter = twitter
-        self.replied_list: List[str] = []
-
-    def on_response(self, response: tweepy.Response) -> None:
-        # TODO: レスポンスの中で rule に該当するものだけフィルタする処理が必要
-        data = response.data
-        users = response.includes["users"]
-        tweet = Tweet.from_responses_v2(tweets=[data], users=users)
-        print(tweet)
-
-        if not tweet:
-            return
-
-        handle_reply(
-            tweet=tweet[0],
-            replied_list=self.replied_list,
-            rating_info=self.rating_info,
-            rating_summary=self.rating_summary,
-            twitter=self.twitter,
-        )
-
-
-class SyarohoStreaming(tweepy.StreamingClient):
-    def __init__(self) -> None:
-        super(SyarohoStreaming, self).__init__(self.bearer_token)
-        # for syaroho
-        self.tweets: List[Tweet] = []
-
-        # for saving information
-        self.raw_data: List[tweepy.Tweet] = []
-        self.raw_medias: List[tweepy.Media] = []
-        self.raw_places: List[tweepy.Place] = []
-        self.raw_polls: List[tweepy.Poll] = []
-        self.raw_tweets: List[tweepy.Tweet] = []
-        self.raw_users: List[tweepy.User] = []
-
-    def on_response(self, response: tweepy.Response) -> None:
-        print(f"[on_response] {response}")
-        data = response.data
-        users = response.includes["users"]
-        tweets = Tweet.from_responses_v2(tweets=[data], users=users)
-        self.tweets += tweets
-
-        self.raw_data.append(response.data)
-        self.raw_medias += response.includes.get("medias", [])
-        self.raw_places += response.includes.get("places", [])
-        self.raw_polls += response.includes.get("polls", [])
-        self.raw_tweets += response.includes.get("tweets", [])
-        self.raw_users += response.includes.get("users", [])
-
-    def get_data_dict(self) -> Dict[str, Any]:
-        return TwitterV2.resp_to_dict(
-            data=self.raw_data,
-            medias=self.raw_medias,
-            places=self.raw_places,
-            polls=self.raw_polls,
-            tweets=self.raw_tweets,
-            users=self.raw_users,
-        )
+            time.sleep(interval)

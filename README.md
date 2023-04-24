@@ -36,7 +36,6 @@
 | ACCOUNT_NAME         | はい                                                | Twitter アカウント名 (@の後の文字列)                     |
 | ENVIRONMENT_NAME     | いいえ(TWITTER_API_VERSION が 1 が 1C の時のみ必要) | dev environment の名前 (Premium Search API 用)           |
 | LIST_SLUG            | いいえ(TWITTER_API_VERSION が 1 が 1C の時のみ必要) | しゃろほー集計用に作ったリスト名                         |
-| TWITTER_BEARER_TOKEN | いいえ(TWITTER_API_VERSION が 2 の時のみ必要)       | Twitter API 管理画面から取得                             |
 | SYAROHO_LIST_ID      | いいえ(TWITTER_API_VERSION が 2 の時のみ必要)       | しゃろほー集計用に作ったリストID                         |
 | TWITTER_PASSWORD     | いいえ(TWITTER_API_VERSION が 1C の時のみ必要)      | Twitter アカウントのログインパスワード                   |
 | STORAGE              | はい                                                | local or s3                                              |

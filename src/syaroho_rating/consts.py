@@ -17,7 +17,6 @@ ACCOUNT_NAME = os.environ["ACCOUNT_NAME"]
 ENVIRONMENT_NAME = os.environ.get("ENVIRONMENT_NAME")
 LIST_SLUG = os.environ.get("LIST_SLUG")
 # APIv2
-BEARER_TOKEN = os.environ.get("TWITTER_BEARER_TOKEN")
 SYAROHO_LIST_ID = os.environ.get("SYAROHO_LIST_ID")
 # APIv1C
 TWITTER_PASSWORD = os.environ.get("TWITTER_PASSWORD")

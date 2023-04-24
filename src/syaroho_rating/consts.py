@@ -6,6 +6,11 @@ import numpy as np
 
 TZ = "Asia/Tokyo"
 
+# ntplib
+NTPLIB_VERSION = 4
+NTP_SERVER_URI = "jp.pool.ntp.org"
+NTPLIB_FORMAT = "%a %b %d %H:%M:%S %Y"
+
 # twitter configs
 TWITTER_API_VERSION = os.environ["TWITTER_API_VERSION"]
 CONSUMER_KEY = os.environ["CONSUMER_KEY"]

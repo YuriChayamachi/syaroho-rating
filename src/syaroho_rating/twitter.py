@@ -27,6 +27,7 @@ from syaroho_rating.consts import (
 )
 from syaroho_rating.message import create_reply_message
 from syaroho_rating.model import Tweet, User
+from syaroho_rating.time import get_now
 from syaroho_rating.utils import datetime_to_tweetid, tweetid_to_datetime
 from syaroho_rating.visualize.graph import GraphMaker
 
@@ -219,7 +220,7 @@ def handle_reply(
     tweet_id = str(tweet.id)
     text = tweet.text
     reply_time = tweetid_to_datetime(tweet_id)  # type: pendulum.DateTime
-    delta_second = (pendulum.now("Asia/Tokyo") - reply_time).total_seconds()
+    delta_second = (get_now() - reply_time).total_seconds()
 
     already_replied = name in replied_list
     is_text_valid = (
@@ -651,7 +652,7 @@ class TwitterV2(Twitter):
         self, rating_infos: Dict[str, Any], summary_df: pd.DataFrame
     ) -> None:
         replied_list: List[str] = []
-        target_date = pendulum.now(tz=TZ)
+        now = get_now()
         query = f"to:{ACCOUNT_NAME} OR @{ACCOUNT_NAME}"
 
         rating_summary = summary_df.reset_index().set_index("User")
@@ -661,10 +662,10 @@ class TwitterV2(Twitter):
         start_t = time.time()
         while time.time() - start_t < dt.timedelta(minutes=10).total_seconds():
             sec_elapse = round(time.time() - start_t)
-            start_time = target_date.add(
+            start_time = now.add(
                 seconds=sec_elapse - lag - interval - 1
             )  # 1秒間重複してもれなく検索
-            end_time = target_date.add(seconds=sec_elapse - lag)
+            end_time = now.add(seconds=sec_elapse - lag)
             tweets, all_info_dict = self.fetch_tweets(
                 query=query,
                 start_time=start_time,

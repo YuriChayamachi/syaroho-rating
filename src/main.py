@@ -14,6 +14,7 @@ from syaroho_rating.consts import (
 from syaroho_rating.io_handler import get_io_handler
 from syaroho_rating.slack import get_slack_notifier
 from syaroho_rating.syaroho import Syaroho
+from syaroho_rating.time import get_now, get_today
 from syaroho_rating.twitter import get_twitter
 from syaroho_rating.utils import parse_date_string
 
@@ -33,7 +34,7 @@ def run() -> None:
     io_handler = get_io_handler(TWITTER_API_VERSION)
     syaroho = Syaroho(twitter, io_handler)
 
-    today = pendulum.today(TZ)
+    today = get_today()
     today_str = today.strftime("%Y-%m-%d")
 
     slack.notify_info(title=f"{today_str} しゃろほー観測開始", text="")
@@ -41,7 +42,7 @@ def run() -> None:
     try:
         # wait until 00:00:05 JST
         if not DEBUG:
-            dur = pendulum.now(TZ) - today.replace(second=5)
+            dur = get_now() - today.replace(second=5)
             if dur.total_seconds() > 0:
                 time.sleep(dur.total_seconds())
 
@@ -51,7 +52,7 @@ def run() -> None:
 
         # wait until 00:02:00 JST
         if not DEBUG:
-            dur = pendulum.now(TZ) - today.replace(minute=2)
+            dur = get_now() - today.replace(minute=2)
             if dur.total_seconds() > 0:
                 time.sleep(dur.total_seconds())
 
@@ -121,7 +122,7 @@ def fetch_tweet(date: str, save: bool) -> None:
 
 @cli.command(hidden=True)
 def test_reply() -> None:
-    today = pendulum.today(TZ)
+    today = get_today()
     twitter = get_twitter(TWITTER_API_VERSION)
     io_handler = get_io_handler(TWITTER_API_VERSION)
     syaroho = Syaroho(twitter, io_handler)

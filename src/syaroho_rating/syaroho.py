@@ -7,6 +7,7 @@ from tweepy.errors import Forbidden
 from syaroho_rating.io_handler import IOHandler
 from syaroho_rating.model import Tweet, User
 from syaroho_rating.rating import calc_rating_for_date, summarize_rating_info
+from syaroho_rating.time import get_today
 from syaroho_rating.twitter import Twitter
 from syaroho_rating.utils import timedelta_to_ms, tweetid_to_datetime
 from syaroho_rating.visualize.graph import GraphMaker
@@ -85,7 +86,7 @@ class Syaroho(object):
         return
 
     def run_dq(self, do_post: bool = False) -> List[Tweet]:
-        today = pendulum.today("Asia/Tokyo")
+        today = get_today()
         statuses = self._fetch_and_save_result_dq(today)
         posts = filter_and_sort(statuses, today)
 

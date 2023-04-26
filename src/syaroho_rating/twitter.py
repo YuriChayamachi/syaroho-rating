@@ -19,10 +19,10 @@ from syaroho_rating.consts import (
     CONSUMER_SECRET,
     ENVIRONMENT_NAME,
     LIST_SLUG,
+    REPLY_WAIT_TIME,
     SYAROHO_LIST_ID,
     TWITTER_COOKIE_PATH,
     TWITTER_PASSWORD,
-    TZ,
     reply_patience,
 )
 from syaroho_rating.message import create_reply_message
@@ -660,7 +660,10 @@ class TwitterV2(Twitter):
         interval = 20  # s
         lag = 12  # s  (ツイート検索に end_time を指定する時は10秒以上前でないとエラーになる)
         start_t = time.time()
-        while time.time() - start_t < dt.timedelta(minutes=10).total_seconds():
+        while (
+            time.time() - start_t
+            < dt.timedelta(minutes=REPLY_WAIT_TIME).total_seconds()
+        ):
             sec_elapse = round(time.time() - start_t)
             start_time = now.add(
                 seconds=sec_elapse - lag - interval - 1

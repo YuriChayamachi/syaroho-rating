@@ -41,6 +41,7 @@ DO_RETWEET = True if os.environ["DO_RETWEET"] == "True" else False
 DO_POST = True if os.environ["DO_POST"] == "True" else False
 DEBUG = True if os.environ["DEBUG"] == "True" else False
 
+REPLY_WAIT_TIME = 5  # minutes
 reply_patience = 900  # 投稿からこの秒数以上経過したツイートには返信しない
 id_hist_max = 100  # 返信済のツイートIDの最大保持数
 

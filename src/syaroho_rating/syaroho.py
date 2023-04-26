@@ -7,12 +7,9 @@ from tweepy.errors import Forbidden
 from syaroho_rating.io_handler import IOHandler
 from syaroho_rating.model import Tweet, User
 from syaroho_rating.rating import calc_rating_for_date, summarize_rating_info
-from syaroho_rating.twitter import Twitter, is_valid_client
-from syaroho_rating.utils import (
-    clean_html_tag,
-    timedelta_to_ms,
-    tweetid_to_datetime,
-)
+from syaroho_rating.time import get_today
+from syaroho_rating.twitter import Twitter
+from syaroho_rating.utils import timedelta_to_ms, tweetid_to_datetime
 from syaroho_rating.visualize.graph import GraphMaker
 from syaroho_rating.visualize.table import TableMaker
 
@@ -23,9 +20,7 @@ def filter_and_sort(
     # 参加者リストの作成
     participants = []
     for s in statuses:
-        if not (
-            (s.text == "しゃろほー") and is_valid_client(clean_html_tag(s.source))
-        ):
+        if not ((s.text == "しゃろほー")):
             continue
 
         rawtime = tweetid_to_datetime(s.id)
@@ -77,11 +72,7 @@ class Syaroho(object):
         existing_user_names = [u.username for u in users]
 
         competitor_names = [
-            s.author.username
-            for s in statuses
-            if s.text == "しゃろほー"
-            # s["source"] is like "<a href="url_to_client">client_name</a>"
-            and is_valid_client(s.source)
+            s.author.username for s in statuses if s.text == "しゃろほー"
         ]
 
         new_member_names = set(competitor_names) - set(existing_user_names)
@@ -95,7 +86,7 @@ class Syaroho(object):
         return
 
     def run_dq(self, do_post: bool = False) -> List[Tweet]:
-        today = pendulum.today("Asia/Tokyo")
+        today = get_today()
         statuses = self._fetch_and_save_result_dq(today)
         posts = filter_and_sort(statuses, today)
 

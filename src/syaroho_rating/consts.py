@@ -6,6 +6,11 @@ import numpy as np
 
 TZ = "Asia/Tokyo"
 
+# ntplib
+NTPLIB_VERSION = 4
+NTP_SERVER_URI = "jp.pool.ntp.org"
+NTPLIB_FORMAT = "%a %b %d %H:%M:%S %Y"
+
 # twitter configs
 TWITTER_API_VERSION = os.environ["TWITTER_API_VERSION"]
 CONSUMER_KEY = os.environ["CONSUMER_KEY"]
@@ -17,7 +22,6 @@ ACCOUNT_NAME = os.environ["ACCOUNT_NAME"]
 ENVIRONMENT_NAME = os.environ.get("ENVIRONMENT_NAME")
 LIST_SLUG = os.environ.get("LIST_SLUG")
 # APIv2
-BEARER_TOKEN = os.environ.get("TWITTER_BEARER_TOKEN")
 SYAROHO_LIST_ID = os.environ.get("SYAROHO_LIST_ID")
 # APIv1C
 TWITTER_PASSWORD = os.environ.get("TWITTER_PASSWORD")
@@ -37,6 +41,7 @@ DO_RETWEET = True if os.environ["DO_RETWEET"] == "True" else False
 DO_POST = True if os.environ["DO_POST"] == "True" else False
 DEBUG = True if os.environ["DEBUG"] == "True" else False
 
+REPLY_WAIT_TIME = 5  # minutes
 reply_patience = 900  # 投稿からこの秒数以上経過したツイートには返信しない
 id_hist_max = 100  # 返信済のツイートIDの最大保持数
 
@@ -113,10 +118,4 @@ month_name = [
     "Oct",
     "Nov",
     "Dec",
-]
-
-invalid_clients = [
-    "twittbot.net",
-    "IFTTT",
-    "Botbird tweets",
 ]
